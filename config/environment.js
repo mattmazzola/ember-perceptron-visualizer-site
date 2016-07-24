@@ -3,6 +3,7 @@
 module.exports = function(environment) {
   var ENV = {
     modulePrefix: 'ember-perceptron-visualizer-site',
+    podModulePrefix: 'ember-perceptron-visualizer-site/pods',
     environment: environment,
     baseURL: '/',
     locationType: 'auto',
