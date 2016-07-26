@@ -7,6 +7,9 @@ module.exports = function(defaults) {
     // Add options here
   });
 
+  app.import('vendor/perceptron.js');
+  app.import('vendor/perceptron-visualizer.js');
+
   // Use `app.import` to add additional libraries to the generated
   // output files.
   //
