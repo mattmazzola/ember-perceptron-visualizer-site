@@ -1,1 +1,85 @@
-<h2>Index</h2>
+<header>
+  <h1>Perceptron Visualizer</h1>
+</header>
+<main>
+  <div class="container">
+    <p class="text-center description">
+      Visualize how data which can be divided <br>by a line can be learned by a perceptron.
+    </p>
+
+    <div class="perceptron-visualizer-container">
+      {{perceptron-visualizer
+        mode=visualizerMode
+        reset=visualizerReset
+        slope=trainedLineSlope
+        offset=trainedLineOffset
+        onPointAdded=(action 'pointAdded')
+        onIdealLineUpdated=(action 'idealLineUpdated')
+        onTrainingLineUpdated=(action 'trainingLineUpdated')
+      }}
+    </div>
+    <div class="text-center">
+      <button type="button" class="btn btn-primary" {{action (action 'changeModesClicked')}}>Change Modes to {{#if visualizerMode}}Select Training Points{{else}}Set Ideal Line{{/if}}</button>
+    </div>
+
+    <h2>Training Data</h2>
+
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Point</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each trainingPoints as |point|}}
+        <tr>
+          <td>({{point.x}},{{point.y}})</td>
+          <td>{{point.result}}</td>
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="2">Select points</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    <div class="text-center">
+      <button type="button" class="btn btn-primary">Train</button>
+      <button type="button" class="btn btn-warning" {{action (action 'resetClicked')}}>Reset</button>
+    </div>
+
+    <h2>Ideal Line</h2>
+    <p class="equation">y = {{#if idealLineSlope}}{{idealLineSlope}}{{else}}m{{/if}}x + {{#if idealLineOffset}}{{idealLineOffset}}{{else}}b{{/if}}</p>
+
+    <h2>Trained Line</h2>
+    <p class="equation">y = {{#if trainedLineSlope}}{{trainedLineSlope}}{{else}}m{{/if}}x + {{#if trainedLineOffset}}{{trainedLineOffset}}{{else}}b{{/if}}</p>
+
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Weights</th>
+          <th>Result</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>[0,0,0]</td>
+          <td>False</td>
+          <td>w1 + 1</td>
+        </tr>
+        <tr>
+          <td>[1,0,0]</td>
+          <td>False</td>
+          <td>w2 + 1</td>
+        </tr>
+        <tr>
+          <td>[1,1,0]</td>
+          <td>False</td>
+          <td>w3 + 1</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
