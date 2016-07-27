@@ -33,6 +33,8 @@
             }
             // Create new weights vector matching length of training data and set values to 0
             var weights = Array.apply(null, new Array(trainingSet[0].vector.length)).map(function () { return 0; });
+            var maxIterations = 2000;
+            var i = 1;
             var _loop_1 = function() {
                 var errorCount = 0;
                 trainingSet
@@ -55,9 +57,12 @@
                     return "break";
                 }
             };
-            while (true) {
+            for (i = 1; i <= maxIterations; i++) {
                 var state_1 = _loop_1();
                 if (state_1 === "break") break;
+            }
+            if (i === maxIterations) {
+                throw new Error('Max Iterations reached. The training loop was terminated to prevent infinite loop');
             }
             this.weights = weights;
         };
