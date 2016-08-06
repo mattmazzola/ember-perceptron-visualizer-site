@@ -19,35 +19,43 @@
     }
 
     var Perceptron = (function () {
-        function Perceptron(threshold, learningRate) {
-            if (threshold === void 0) { threshold = 0.5; }
-            if (learningRate === void 0) { learningRate = 0.1; }
-            this.threshold = threshold;
-            this.learningRate = learningRate;
+        function Perceptron() {
+            this.learningRate = 0.1;
         }
-        Perceptron.prototype.train = function (trainingSet, threshold, learningRate) {
-            if (threshold === void 0) { threshold = this.threshold; }
+        Perceptron.prototype.train = function (trainingSet, learningRate) {
             if (learningRate === void 0) { learningRate = this.learningRate; }
             if (trainingSet.length === 0) {
                 throw new Error("trainingSet data must be non-empty array. You provided: " + trainingSet);
             }
             // Create new weights vector matching length of training data and set values to 0
-            var weights = Array.apply(null, new Array(trainingSet[0].vector.length)).map(function () { return 0; });
+            var weights = Array.apply(null, new Array(trainingSet[0].vector.length + 1)).map(function () { return 0; });
+            var learningSet = [];
+            var theta = 0;
             var maxIterations = 2000;
-            var i = 1;
+            var i;
             var _loop_1 = function() {
                 var errorCount = 0;
                 trainingSet
                     .forEach(function (_a) {
                     var vector = _a.vector, output = _a.output;
-                    var dotProduct$$ = dotProduct(vector, weights);
-                    var result = dotProduct$$ >= threshold;
+                    var trainingVector = vector.concat([1]);
+                    var dotProduct$$ = dotProduct(trainingVector, weights);
+                    var result = dotProduct$$ >= theta;
                     var error = (output ? 1 : 0) - (result ? 1 : 0);
-                    console.log("Vector: " + vector + ", Weights: " + weights + ", Output: " + dotProduct$$ + " - " + result + ", Expected: " + threshold + " - " + output);
+                    var learningData = {
+                        weights: weights.slice(0, 2),
+                        vector: vector.slice(0),
+                        dotProduct: dotProduct$$,
+                        result,
+                        threshold: -weights[2],
+                        output,
+                        weightsChanged: false
+                    };
+                    learningSet.push(learningData);
                     if (error !== 0) {
                         errorCount += 1;
-                        console.log('adjust weights');
-                        vector
+                        learningSet[learningSet.length - 1].weightsChanged = true;
+                        trainingVector
                             .forEach(function (x, i) {
                             weights[i] += learningRate * error * x;
                         });
@@ -57,14 +65,16 @@
                     return "break";
                 }
             };
-            for (i = 1; i <= maxIterations; i++) {
+            for (i = 0; i < maxIterations; i++) {
                 var state_1 = _loop_1();
                 if (state_1 === "break") break;
             }
+            this.weights = weights.slice(0, 2);
+            this.threshold = -weights[2];
             if (i === maxIterations) {
                 throw new Error('Max Iterations reached. The training loop was terminated to prevent infinite loop');
             }
-            this.weights = weights;
+            return learningSet;
         };
         Perceptron.prototype.perceive = function (vector, weights, threshold) {
             if (weights === void 0) { weights = this.weights; }

@@ -40,10 +40,9 @@ export default Ember.Controller.extend({
 
       const run = (data.x2 - data.x1);
       let m = Infinity;
-      if (run === 0) {
+      if (run !== 0) {
         m = (data.y2 - data.y1)/run;
       }
-
 
       this.set('idealLineSlope', m);
       this.set('idealLineOffset', 10);
@@ -56,13 +55,15 @@ export default Ember.Controller.extend({
           };
         });
 
-      const theta = 0.5;
-      this.get('perceptron').train(trainingData, theta, 0.1);
+      const learningData = this.get('perceptron').train(trainingData, 0.5);
       const weights = this.get('perceptron').weights;
+      const threshold = this.get('perceptron').threshold;
+
       console.log(`Weights: `, weights);
+      console.log(`learningData: `, learningData);
 
       const slope = -weights[0] / weights[1];
-      const offset = theta / weights[1];
+      const offset = -threshold / weights[1];
 
       this.set('trainedLineSlope', slope);
       this.set('trainedLineOffset', offset);

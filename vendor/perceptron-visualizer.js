@@ -3518,7 +3518,7 @@ var     t1$1 = new Date;
     }
 
     var Chart = (function () {
-        function Chart(selector, domain, data) {
+        function Chart(selector, domain) {
             var _this = this;
             // Defaults
             this.width = 400;
@@ -3527,31 +3527,54 @@ var     t1$1 = new Date;
             this.paddingRight = 30;
             this.paddingBottom = 30;
             this.paddingLeft = 30;
-            this.circles = [];
+            this.model = {
+                points: [],
+                idealLine: null,
+                trainingLines: []
+            };
             this.idealLineStartPoint = {
-                x: 0,
-                y: 0,
-                scaledX: 0,
-                scaledY: 0
+                normal: {
+                    x: 0,
+                    y: 0
+                },
+                scaled: {
+                    x: 0,
+                    y: 0
+                }
             };
             this.idealLineEndPoint = {
-                x: 0,
-                y: 0,
-                scaledX: 0,
-                scaledY: 0
+                normal: {
+                    x: 0,
+                    y: 0
+                },
+                scaled: {
+                    x: 0,
+                    y: 0
+                }
+            };
+            this.dragMoveData = {
+                slope: undefined,
+                offset: undefined
             };
             this.dragStartPoint = {
-                id: 100,
-                x: 0,
-                y: 0,
-                scaledX: 0,
-                scaledY: 0
+                normal: {
+                    x: 0,
+                    y: 0
+                },
+                scaled: {
+                    x: 0,
+                    y: 0
+                }
             };
             this.dragEndPoint = {
-                x: 0,
-                y: 0,
-                scaledX: 0,
-                scaledY: 0
+                normal: {
+                    x: 0,
+                    y: 0
+                },
+                scaled: {
+                    x: 0,
+                    y: 0
+                }
             };
             this.trainingLine = {
                 slope: -1,
@@ -3625,8 +3648,10 @@ var     t1$1 = new Date;
                 .on("end", function () { return _this.dragEnded(); });
         }
         Chart.prototype.reset = function () {
-            this.circles.length = 0;
-            this.update();
+            // Reset points, ideal line, and training lines
+            this.model.points.length = 0;
+            this.model.trainingLines.length = 0;
+            this.update(this.model);
             this.svg
                 .selectAll('line.train')
                 .remove('line');
@@ -3655,8 +3680,8 @@ var     t1$1 = new Date;
                 r: 5,
                 result: null
             };
-            this.circles.push(newCircle);
-            this.update();
+            this.model.points.push(newCircle);
+            this.update(this.model);
             var customEvent = new CustomEvent("pointAdded", {
                 detail: {
                     x: newCircle.x,
@@ -3668,20 +3693,24 @@ var     t1$1 = new Date;
         Chart.prototype.dragStarted = function () {
             if (!this.mode) {
                 var _a = [event.x, event.y], x = _a[0], y = _a[1];
-                this.dragStartPoint.x = x;
-                this.dragStartPoint.scaledX = Math.round(this.xScale.invert(x));
-                this.dragStartPoint.y = y;
-                this.dragStartPoint.scaledY = Math.round(this.yScale.invert(y));
+                this.dragStartPoint.normal.x = x;
+                this.dragStartPoint.normal.y = y;
+                this.dragStartPoint.scaled.x = Math.round(this.xScale.invert(x));
+                this.dragStartPoint.scaled.y = Math.round(this.yScale.invert(y));
             }
         };
         Chart.prototype.dragMove = function () {
             if (!this.mode) {
                 var _a = [event.x, event.y], x = _a[0], y = _a[1];
                 var dragMovePoint = {
-                    x,
-                    y,
-                    scaledX: Math.round(this.xScale.invert(x)),
-                    scaledY: Math.round(this.yScale.invert(y))
+                    normal: {
+                        x,
+                        y
+                    },
+                    scaled: {
+                        x: Math.round(this.xScale.invert(x)),
+                        y: Math.round(this.yScale.invert(y))
+                    }
                 };
                 var run = void 0;
                 var rise = void 0;
@@ -3691,19 +3720,19 @@ var     t1$1 = new Date;
                 var minY = void 0;
                 var maxX = 400;
                 var maxY = void 0;
-                run = (dragMovePoint.x - this.dragStartPoint.x);
-                rise = (dragMovePoint.y - this.dragStartPoint.y);
+                run = (dragMovePoint.normal.x - this.dragStartPoint.normal.x);
+                rise = (dragMovePoint.normal.y - this.dragStartPoint.normal.y);
                 if (run === 0) {
                     slope = Infinity;
                     offset = 0;
                     minY = 0;
-                    minX = dragMovePoint.x,
+                    minX = dragMovePoint.normal.x,
                         maxY = 400;
-                    maxX = dragMovePoint.x;
+                    maxX = dragMovePoint.normal.x;
                 }
                 else {
                     slope = rise / run;
-                    offset = dragMovePoint.y - slope * dragMovePoint.x;
+                    offset = dragMovePoint.normal.y - slope * dragMovePoint.normal.x;
                     minY = slope * (0) + offset;
                     maxY = slope * 400 + offset;
                     if (slope === 0) {
@@ -3715,44 +3744,52 @@ var     t1$1 = new Date;
                         maxX = (maxY - offset) / slope;
                     }
                 }
+                this.dragMoveData.slope = -slope;
+                this.dragMoveData.offset = dragMovePoint.scaled.y + slope * dragMovePoint.scaled.x;
+                console.log(this.dragMoveData);
+                var extendedLine = {
+                    start: {
+                        normal: {
+                            x: minX,
+                            y: minY
+                        },
+                        scaled: null
+                    },
+                    end: {
+                        normal: {
+                            x: maxX,
+                            y: maxY
+                        },
+                        scaled: null
+                    },
+                    userDefined: false
+                };
+                var userDefinedLine = {
+                    start: this.dragStartPoint,
+                    end: dragMovePoint,
+                    userDefined: true
+                };
                 var selection = this.svg
                     .selectAll('line.division')
                     .data([
-                    {
-                        id: -this.dragStartPoint.id,
-                        x1: minX,
-                        y1: minY,
-                        x2: maxX,
-                        y2: maxY,
-                        strokeWidth: 2,
-                        userDefined: false
-                    },
-                    {
-                        id: this.dragStartPoint.id,
-                        x1: this.dragStartPoint.x,
-                        y1: this.dragStartPoint.y,
-                        x2: dragMovePoint.x,
-                        y2: dragMovePoint.y,
-                        strokeWidth: 3,
-                        userDefined: true
-                    },
-                ], function (d) { return d.id; });
+                    extendedLine,
+                    userDefinedLine,
+                ]);
                 selection
                     .enter()
                     .append('line')
-                    .attr('x1', function (d) { return d.x1; })
-                    .attr('y1', function (d) { return d.y1; })
-                    .attr('x2', function (d) { return d.x2; })
-                    .attr('y2', function (d) { return d.y2; })
-                    .attr('stroke-width', function (d) { return d.strokeWidth; })
+                    .attr('x1', function (d) { return d.start.normal.x; })
+                    .attr('y1', function (d) { return d.start.normal.y; })
+                    .attr('x2', function (d) { return d.end.normal.x; })
+                    .attr('y2', function (d) { return d.end.normal.y; })
                     .classed('division', true)
                     .classed('division--full', function (d) { return d.userDefined === false; })
                     .classed('division--user-defined', function (d) { return d.userDefined === true; });
                 selection
-                    .attr('x1', function (d) { return d.x1; })
-                    .attr('y1', function (d) { return d.y1; })
-                    .attr('x2', function (d) { return d.x2; })
-                    .attr('y2', function (d) { return d.y2; });
+                    .attr('x1', function (d) { return d.start.normal.x; })
+                    .attr('y1', function (d) { return d.start.normal.y; })
+                    .attr('x2', function (d) { return d.end.normal.x; })
+                    .attr('y2', function (d) { return d.end.normal.y; });
                 selection
                     .exit()
                     .remove('line');
@@ -3762,42 +3799,44 @@ var     t1$1 = new Date;
             var _this = this;
             if (!this.mode) {
                 var _a = [event.x, event.y], x = _a[0], y = _a[1];
-                this.dragEndPoint.x = x;
-                this.dragEndPoint.scaledX = Math.round(this.xScale.invert(x));
-                this.dragEndPoint.y = y;
-                this.dragEndPoint.scaledY = Math.round(this.yScale.invert(y));
-                var differentStartPoint = (this.dragStartPoint.x != this.dragEndPoint.x)
-                    || (this.dragEndPoint.x != this.dragEndPoint.x)
-                    || (this.dragStartPoint.y != this.dragStartPoint.y)
-                    || (this.dragEndPoint.y != this.dragEndPoint.y);
+                this.dragEndPoint.normal.x = x;
+                this.dragEndPoint.normal.y = y;
+                this.dragEndPoint.scaled.x = Math.round(this.xScale.invert(x));
+                this.dragEndPoint.scaled.y = Math.round(this.yScale.invert(y));
+                var differentStartPoint = (this.dragStartPoint.normal.x !== this.dragEndPoint.normal.x)
+                    || (this.dragEndPoint.normal.x !== this.dragEndPoint.normal.x)
+                    || (this.dragStartPoint.normal.y !== this.dragStartPoint.normal.y)
+                    || (this.dragEndPoint.normal.y !== this.dragEndPoint.normal.y);
                 if (differentStartPoint) {
                     // Start
-                    this.idealLineStartPoint.x = this.dragStartPoint.x;
-                    this.idealLineStartPoint.scaledX = this.dragStartPoint.scaledX;
-                    this.idealLineStartPoint.y = this.dragStartPoint.y;
-                    this.idealLineStartPoint.scaledY = this.dragStartPoint.scaledY;
+                    this.idealLineStartPoint.normal.x = this.dragStartPoint.normal.x;
+                    this.idealLineStartPoint.normal.y = this.dragStartPoint.normal.y;
+                    this.idealLineStartPoint.scaled.x = this.dragStartPoint.scaled.x;
+                    this.idealLineStartPoint.scaled.y = this.dragStartPoint.scaled.y;
                     // End
-                    this.idealLineEndPoint.x = this.dragEndPoint.x;
-                    this.idealLineEndPoint.scaledX = this.dragEndPoint.scaledX;
-                    this.idealLineEndPoint.y = this.dragEndPoint.y;
-                    this.idealLineEndPoint.scaledY = this.dragEndPoint.scaledY;
-                    var positivePoints = this.circles
+                    this.idealLineEndPoint.normal.x = this.dragEndPoint.normal.x;
+                    this.idealLineEndPoint.normal.y = this.dragEndPoint.normal.y;
+                    this.idealLineEndPoint.scaled.x = this.dragEndPoint.scaled.x;
+                    this.idealLineEndPoint.scaled.y = this.dragEndPoint.scaled.y;
+                    var partionedPoints = this.model.points
                         .map(function (d) {
-                        d.result = _this.crossProduct(d);
+                        d.result = (_this.crossProduct(d) > 0);
                         return d;
                     });
                     var selection = this.svg
                         .selectAll('circle')
-                        .data(this.circles)
+                        .data(this.model.points)
                         .classed('circle--positive', function (d) { return d.result === true; })
                         .classed('circle--negative', function (d) { return d.result === false; });
                     var customEvent = new CustomEvent("idealLineUpdated", {
                         detail: {
-                            x1: this.idealLineStartPoint.x,
-                            y1: this.idealLineStartPoint.y,
-                            x2: this.idealLineEndPoint.x,
-                            y2: this.idealLineEndPoint.y,
-                            points: positivePoints
+                            x1: this.idealLineStartPoint.scaled.x,
+                            y1: this.idealLineStartPoint.scaled.y,
+                            x2: this.idealLineEndPoint.scaled.x,
+                            y2: this.idealLineEndPoint.scaled.y,
+                            slope: this.dragMoveData.slope,
+                            offset: this.dragMoveData.offset,
+                            points: partionedPoints
                         }
                     });
                     this.containgElement.node().dispatchEvent(customEvent);
@@ -3805,41 +3844,71 @@ var     t1$1 = new Date;
             }
         };
         Chart.prototype.crossProduct = function (d) {
-            var a = {
-                x: this.idealLineStartPoint.scaledX,
-                y: this.idealLineStartPoint.scaledY
-            };
-            var b = {
-                x: this.idealLineEndPoint.scaledX,
-                y: this.idealLineEndPoint.scaledY
-            };
+            var a = this.idealLineStartPoint.scaled;
+            var b = this.idealLineEndPoint.scaled;
             var p = {
                 x: d.x,
                 y: d.y
             };
-            var crossProduct = ((b.x - a.x) * (p.y - a.y)) - ((b.y - a.y) * (p.x - a.x));
-            return (crossProduct > 0);
+            return ((b.x - a.x) * (p.y - a.y)) - ((b.y - a.y) * (p.x - a.x));
         };
-        Chart.prototype.update = function () {
+        Chart.prototype.update = function (model) {
             var _this = this;
-            var selection = this.svg
+            // Update Points
+            var circlesSelection = this.svg
                 .selectAll('circle')
-                .data(this.circles);
-            selection
+                .data(this.model.points);
+            circlesSelection
                 .enter()
                 .append("circle")
                 .attr("cx", function (d) { return _this.xScale(d.x); })
                 .attr("cy", function (d) { return _this.yScale(d.y); })
                 .attr("r", function (d) { return d.r; })
                 .classed('circle', true);
-            selection
+            circlesSelection
                 .attr("cx", function (d) { return _this.xScale(d.x); })
                 .attr("cy", function (d) { return _this.yScale(d.y); });
-            selection
+            circlesSelection
                 .exit()
                 .remove('circle');
+            // Update training lines
+            var trainingLinesSelection = this.svg
+                .selectAll('line.train')
+                .data(this.model.trainingLines);
+            trainingLinesSelection
+                .enter()
+                .append('line')
+                .attr('x1', function (d) { return d.start.normal.x; })
+                .attr('y1', function (d) { return d.start.normal.y; })
+                .attr('x2', function (d) { return d.end.normal.x; })
+                .attr('y2', function (d) { return d.end.normal.y; })
+                .classed('train', true);
+            trainingLinesSelection
+                .attr('x1', function (d) { return d.start.normal.x; })
+                .attr('y1', function (d) { return d.start.normal.y; })
+                .attr('x2', function (d) { return d.end.normal.x; })
+                .attr('y2', function (d) { return d.end.normal.y; });
+            trainingLinesSelection
+                .exit()
+                .remove('line');
         };
-        Chart.prototype.updateTrainingLine = function (slope, offset) {
+        Chart.prototype.addTrainingLine = function (slope, offset) {
+            var line = this.convertSlopeOffsetToCoordinates(slope, offset);
+            this.model.trainingLines.push(line);
+            this.update(this.model);
+            var customEvent = new CustomEvent("trainingLineUpdated", {
+                detail: {
+                    x1: line.start.scaled.x,
+                    y1: line.start.scaled.y,
+                    x2: line.end.scaled.x,
+                    y2: line.end.scaled.y,
+                    slope,
+                    offset
+                }
+            });
+            this.containgElement.node().dispatchEvent(customEvent);
+        };
+        Chart.prototype.convertSlopeOffsetToCoordinates = function (slope, offset) {
             var minScaledX = this.xScale.invert(0);
             var maxScaledX = this.xScale.invert(400);
             var minX = this.xScale(minScaledX);
@@ -3856,44 +3925,29 @@ var     t1$1 = new Date;
                 minY = this.yScale(slope * minScaledX + offset);
                 maxY = this.yScale(slope * maxScaledX + offset);
             }
-            var selection = this.svg
-                .selectAll('line.train')
-                .data([
-                {
-                    id: 123,
-                    x1: minX,
-                    y1: minY,
-                    x2: maxX,
-                    y2: maxY,
-                    strokeWidth: 2
-                }
-            ], function (d) { return d.id; });
-            selection
-                .enter()
-                .append('line')
-                .attr('x1', function (d) { return d.x1; })
-                .attr('y1', function (d) { return d.y1; })
-                .attr('x2', function (d) { return d.x2; })
-                .attr('y2', function (d) { return d.y2; })
-                .attr('stroke-width', function (d) { return d.strokeWidth; })
-                .classed('train', true);
-            selection
-                .attr('x1', function (d) { return d.x1; })
-                .attr('y1', function (d) { return d.y1; })
-                .attr('x2', function (d) { return d.x2; })
-                .attr('y2', function (d) { return d.y2; });
-            selection
-                .exit()
-                .remove('line');
-            var customEvent = new CustomEvent("trainingLineUpdated", {
-                detail: {
-                    x1: minX,
-                    y1: minY,
-                    x2: maxX,
-                    y2: maxY
-                }
-            });
-            this.containgElement.node().dispatchEvent(customEvent);
+            return {
+                start: {
+                    normal: {
+                        x: minX,
+                        y: minY
+                    },
+                    scaled: {
+                        x: this.xScale.invert(minX),
+                        y: this.yScale.invert(minY)
+                    }
+                },
+                end: {
+                    normal: {
+                        x: maxX,
+                        y: maxY
+                    },
+                    scaled: {
+                        x: this.xScale.invert(maxX),
+                        y: this.yScale.invert(maxY)
+                    }
+                },
+                userDefined: false
+            };
         };
         return Chart;
     }());

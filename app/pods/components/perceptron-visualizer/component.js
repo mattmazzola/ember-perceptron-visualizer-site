@@ -1,8 +1,5 @@
 import Ember from 'ember';
 
-const {
-  observes
-} = Ember;
 export default Ember.Component.extend({
   chartMode: false,
   chartReset: false,
@@ -15,7 +12,7 @@ export default Ember.Component.extend({
 
     const $element = this.$();
     const element = $element.get(0);
-    const chart = new perceptronvisualizer('.perceptron-visualizer-container .ember-view',[-50,50], []);
+    const chart = new perceptronvisualizer('.perceptron-visualizer-container .ember-view',[-50,50], []); // jshint ignore:line
     this.set('chart', chart);
 
     $element
@@ -37,17 +34,17 @@ export default Ember.Component.extend({
   didUpdateAttrs() {
     this._super(...arguments);
 
-    if (this.get('mode') != this.get('chartMode')) {
+    if (this.get('mode') !== this.get('chartMode')) {
       this.get('chart').toggleMode();
       this.set('chartMode', this.get('mode'));
     }
 
-    if (this.get('reset') != this.get('chartReset')) {
+    if (this.get('reset') !== this.get('chartReset')) {
       this.get('chart').reset();
     }
 
     if (this.get('slope') && this.get('offset')) {
-      this.get('chart').updateTrainingLine(this.get('slope'), this.get('offset'));
+      this.get('chart').addTrainingLine(this.get('slope'), this.get('offset'));
     }
   },
 
