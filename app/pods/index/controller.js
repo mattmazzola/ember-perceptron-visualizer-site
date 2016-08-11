@@ -5,19 +5,25 @@ const {
 } = Ember;
 
 export default Ember.Controller.extend({
-  visualizerMode: false,
+  interval: 1000,
+  learningDatas: null,
+  visualizerMode: true,
   visualizerReset: false,
   trainingPoints: null,
   idealLineSlope: null,
   idealLineOffset: null,
   trainedLineSlope: null,
   trainedLineOffset: null,
+  trainingLines: null,
   perceptron: null,
 
   init() {
     this._super(...arguments);
     this.set('trainingPoints', []);
+    this.set('trainingLines', []);
+    this.set('learningDatas', []);
     this.set('perceptron', new perceptron.Perceptron(0.5, 0.1));
+    console.log(this);
   },
 
   actions: {
@@ -35,17 +41,11 @@ export default Ember.Controller.extend({
     },
 
     idealLineUpdated(data) {
-      console.log(data);
+      console.log('idealLineUpdated', data);
+
       this.get('trainingPoints').pushObjects(data.points);
-
-      const run = (data.x2 - data.x1);
-      let m = Infinity;
-      if (run !== 0) {
-        m = (data.y2 - data.y1)/run;
-      }
-
-      this.set('idealLineSlope', m);
-      this.set('idealLineOffset', 10);
+      this.set('idealLineSlope', data.slope);
+      this.set('idealLineOffset', data.offset);
 
       const trainingData = data.points
         .map(point => {
@@ -55,21 +55,42 @@ export default Ember.Controller.extend({
           };
         });
 
-      const learningData = this.get('perceptron').train(trainingData, 0.5);
+      const learningDatas = this.get('perceptron').train(trainingData, 0.2);
+      this.get('learningDatas').pushObjects(learningDatas);
+
       const weights = this.get('perceptron').weights;
       const threshold = this.get('perceptron').threshold;
 
-      console.log(`Weights: `, weights);
-      console.log(`learningData: `, learningData);
+      let slope = 0;
+      let offset = 0;
+      if (weights[1] !== 0) {
+        slope = -weights[0] / weights[1];
+        offset = threshold / weights[1];
+      }
 
-      const slope = -weights[0] / weights[1];
-      const offset = -threshold / weights[1];
+      const trainingLines = learningDatas
+        .filter(x => x.weightsChanged)
+        .map(x => {
+          let slope = 0;
+          let offset = 0;
+          if (x.weights[1] !== 0) {
+            slope = -x.weights[0] / x.weights[1];
+            offset = x.threshold / x.weights[1];
+          }
+          
+          return {
+            slope,
+            offset
+          }
+        });
 
       this.set('trainedLineSlope', slope);
       this.set('trainedLineOffset', offset);
+      this.set('trainingLines', trainingLines);
     },
 
     trainingLineUpdated(line) {
+      console.log('trainingLineUpdated', line);
       console.log(line);
     }
   }

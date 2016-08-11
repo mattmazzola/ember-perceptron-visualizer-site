@@ -567,7 +567,7 @@
           : (fullname.local ? attrConstantNS : attrConstant)))(fullname, value));
     }
 
-    function defaultView(node) {
+    function window(node) {
       return (node.ownerDocument && node.ownerDocument.defaultView) // node is a Node
           || (node.document && node) // node is a Window
           || node.defaultView; // node is a Document
@@ -600,7 +600,7 @@
                 ? styleRemove : typeof value === "function"
                 ? styleFunction
                 : styleConstant)(name, value, priority == null ? "" : priority))
-          : defaultView(node = this.node())
+          : window(node = this.node())
               .getComputedStyle(node, null)
               .getPropertyValue(name);
     }
@@ -813,13 +813,13 @@
     }
 
     function dispatchEvent(node, type, params) {
-      var window = defaultView(node),
-          event = window.CustomEvent;
+      var window$$ = window(node),
+          event = window$$.CustomEvent;
 
       if (event) {
         event = new event(type, params);
       } else {
-        event = window.document.createEvent("Event");
+        event = window$$.document.createEvent("Event");
         if (params) event.initEvent(type, params.bubbles, params.cancelable), event.detail = params.detail;
         else event.initEvent(type, false, false);
       }
@@ -1521,7 +1521,7 @@
       return d ? linear$1(a, d) : constant$2(isNaN(a) ? b : a);
     }
 
-    var rgb = (function rgbGamma(y) {
+    var interpolateRgb = (function rgbGamma(y) {
       var color = gamma(y);
 
       function rgb(start, end) {
@@ -1550,7 +1550,7 @@
           c = new Array(nb),
           i;
 
-      for (i = 0; i < na; ++i) x[i] = interpolateValue(a[i], b[i]);
+      for (i = 0; i < na; ++i) x[i] = interpolate(a[i], b[i]);
       for (; i < nb; ++i) c[i] = b[i];
 
       return function(t) {
@@ -1566,7 +1566,7 @@
       };
     }
 
-    function reinterpolate(a, b) {
+    function interpolateNumber(a, b) {
       return a = +a, b -= a, function(t) {
         return a + b * t;
       };
@@ -1582,7 +1582,7 @@
 
       for (k in b) {
         if (k in a) {
-          i[k] = interpolateValue(a[k], b[k]);
+          i[k] = interpolate(a[k], b[k]);
         } else {
           c[k] = b[k];
         }
@@ -1608,7 +1608,7 @@
       };
     }
 
-    function string(a, b) {
+    function interpolateString(a, b) {
       var bi = reA.lastIndex = reB.lastIndex = 0, // scan index for next number in b
           am, // current match in a
           bm, // current match in b
@@ -1633,7 +1633,7 @@
           else s[++i] = bm;
         } else { // interpolate non-matching numbers
           s[++i] = null;
-          q.push({i: i, x: reinterpolate(am, bm)});
+          q.push({i: i, x: interpolateNumber(am, bm)});
         }
         bi = reB.lastIndex;
       }
@@ -1656,16 +1656,16 @@
             });
     }
 
-    function interpolateValue(a, b) {
+    function interpolate(a, b) {
       var t = typeof b, c;
       return b == null || t === "boolean" ? constant$2(b)
-          : (t === "number" ? reinterpolate
-          : t === "string" ? ((c = color(b)) ? (b = c, rgb) : string)
-          : b instanceof color ? rgb
+          : (t === "number" ? interpolateNumber
+          : t === "string" ? ((c = color(b)) ? (b = c, interpolateRgb) : interpolateString)
+          : b instanceof color ? interpolateRgb
           : b instanceof Date ? date
           : Array.isArray(b) ? array$2
           : isNaN(b) ? object
-          : reinterpolate)(a, b);
+          : interpolateNumber)(a, b);
     }
 
     function interpolateRound(a, b) {
@@ -1673,6 +1673,117 @@
         return Math.round(a + b * t);
       };
     }
+
+    var degrees = 180 / Math.PI;
+
+    var identity$2 = {
+      translateX: 0,
+      translateY: 0,
+      rotate: 0,
+      skewX: 0,
+      scaleX: 1,
+      scaleY: 1
+    };
+
+    function decompose(a, b, c, d, e, f) {
+      var scaleX, scaleY, skewX;
+      if (scaleX = Math.sqrt(a * a + b * b)) a /= scaleX, b /= scaleX;
+      if (skewX = a * c + b * d) c -= a * skewX, d -= b * skewX;
+      if (scaleY = Math.sqrt(c * c + d * d)) c /= scaleY, d /= scaleY, skewX /= scaleY;
+      if (a * d < b * c) a = -a, b = -b, skewX = -skewX, scaleX = -scaleX;
+      return {
+        translateX: e,
+        translateY: f,
+        rotate: Math.atan2(b, a) * degrees,
+        skewX: Math.atan(skewX) * degrees,
+        scaleX: scaleX,
+        scaleY: scaleY
+      };
+    }
+
+    var cssNode;
+    var cssRoot;
+    var cssView;
+    var svgNode;
+    function parseCss(value) {
+      if (value === "none") return identity$2;
+      if (!cssNode) cssNode = document.createElement("DIV"), cssRoot = document.documentElement, cssView = document.defaultView;
+      cssNode.style.transform = value;
+      value = cssView.getComputedStyle(cssRoot.appendChild(cssNode), null).getPropertyValue("transform");
+      cssRoot.removeChild(cssNode);
+      value = value.slice(7, -1).split(",");
+      return decompose(+value[0], +value[1], +value[2], +value[3], +value[4], +value[5]);
+    }
+
+    function parseSvg(value) {
+      if (value == null) return identity$2;
+      if (!svgNode) svgNode = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      svgNode.setAttribute("transform", value);
+      if (!(value = svgNode.transform.baseVal.consolidate())) return identity$2;
+      value = value.matrix;
+      return decompose(value.a, value.b, value.c, value.d, value.e, value.f);
+    }
+
+    function interpolateTransform(parse, pxComma, pxParen, degParen) {
+
+      function pop(s) {
+        return s.length ? s.pop() + " " : "";
+      }
+
+      function translate(xa, ya, xb, yb, s, q) {
+        if (xa !== xb || ya !== yb) {
+          var i = s.push("translate(", null, pxComma, null, pxParen);
+          q.push({i: i - 4, x: interpolateNumber(xa, xb)}, {i: i - 2, x: interpolateNumber(ya, yb)});
+        } else if (xb || yb) {
+          s.push("translate(" + xb + pxComma + yb + pxParen);
+        }
+      }
+
+      function rotate(a, b, s, q) {
+        if (a !== b) {
+          if (a - b > 180) b += 360; else if (b - a > 180) a += 360; // shortest path
+          q.push({i: s.push(pop(s) + "rotate(", null, degParen) - 2, x: interpolateNumber(a, b)});
+        } else if (b) {
+          s.push(pop(s) + "rotate(" + b + degParen);
+        }
+      }
+
+      function skewX(a, b, s, q) {
+        if (a !== b) {
+          q.push({i: s.push(pop(s) + "skewX(", null, degParen) - 2, x: interpolateNumber(a, b)});
+        } else if (b) {
+          s.push(pop(s) + "skewX(" + b + degParen);
+        }
+      }
+
+      function scale(xa, ya, xb, yb, s, q) {
+        if (xa !== xb || ya !== yb) {
+          var i = s.push(pop(s) + "scale(", null, ",", null, ")");
+          q.push({i: i - 4, x: interpolateNumber(xa, xb)}, {i: i - 2, x: interpolateNumber(ya, yb)});
+        } else if (xb !== 1 || yb !== 1) {
+          s.push(pop(s) + "scale(" + xb + "," + yb + ")");
+        }
+      }
+
+      return function(a, b) {
+        var s = [], // string constants and placeholders
+            q = []; // number interpolators
+        a = parse(a), b = parse(b);
+        translate(a.translateX, a.translateY, b.translateX, b.translateY, s, q);
+        rotate(a.rotate, b.rotate, s, q);
+        skewX(a.skewX, b.skewX, s, q);
+        scale(a.scaleX, a.scaleY, b.scaleX, b.scaleY, s, q);
+        a = b = null; // gc
+        return function(t) {
+          var i = -1, n = q.length, o;
+          while (++i < n) s[(o = q[i]).i] = o.x(t);
+          return s.join("");
+        };
+      };
+    }
+
+    var interpolateTransform$1 = interpolateTransform(parseCss, "px, ", "px)", "deg)");
+    var interpolateTransform$2 = interpolateTransform(parseSvg, ", ", ")", ")");
 
     function cubehelix$1(hue) {
       return (function cubehelixGamma(y) {
@@ -1776,7 +1887,7 @@
     function continuous(deinterpolate$$, reinterpolate) {
       var domain = unit,
           range = unit,
-          interpolate = interpolateValue,
+          interpolate$$ = interpolate,
           clamp = false,
           piecewise,
           output,
@@ -1789,7 +1900,7 @@
       }
 
       function scale(x) {
-        return (output || (output = piecewise(domain, range, clamp ? deinterpolateClamp(deinterpolate$$) : deinterpolate$$, interpolate)))(+x);
+        return (output || (output = piecewise(domain, range, clamp ? deinterpolateClamp(deinterpolate$$) : deinterpolate$$, interpolate$$)))(+x);
       }
 
       scale.invert = function(y) {
@@ -1805,7 +1916,7 @@
       };
 
       scale.rangeRound = function(_) {
-        return range = slice$1.call(_), interpolate = interpolateRound, rescale();
+        return range = slice$1.call(_), interpolate$$ = interpolateRound, rescale();
       };
 
       scale.clamp = function(_) {
@@ -1813,7 +1924,7 @@
       };
 
       scale.interpolate = function(_) {
-        return arguments.length ? (interpolate = _, rescale()) : interpolate;
+        return arguments.length ? (interpolate$$ = _, rescale()) : interpolate$$;
       };
 
       return rescale();
@@ -2197,7 +2308,7 @@
     }
 
     function linear() {
-      var scale = continuous(deinterpolate, reinterpolate);
+      var scale = continuous(deinterpolate, interpolateNumber);
 
       scale.copy = function() {
         return copy(scale, linear());
@@ -3092,9 +3203,10 @@ var     t1$1 = new Date;
     }
 
     function center(scale) {
-      var width = scale.bandwidth() / 2;
+      var offset = scale.bandwidth() / 2;
+      if (scale.round()) offset = Math.round(offset);
       return function(d) {
-        return scale(d) + width;
+        return scale(d) + offset;
       };
     }
 
@@ -3145,7 +3257,7 @@ var     t1$1 = new Date;
             .attr("fill", "#000")
             .attr(x, k * spacing)
             .attr(y, 0.5)
-            .attr("dy", orient === top ? "0em" : orient === bottom ? ".71em" : ".32em"));
+            .attr("dy", orient === top ? "0em" : orient === bottom ? "0.71em" : "0.32em"));
 
         if (context !== selection) {
           path = path.transition(context);
@@ -3329,7 +3441,7 @@ var     t1$1 = new Date;
       event.stopImmediatePropagation();
     }
 
-    function nodrag(view) {
+    function dragDisable(view) {
       var root = view.document.documentElement,
           selection = select(view).on("dragstart.drag", noevent, true);
       if ("onselectstart" in root) {
@@ -3340,7 +3452,7 @@ var     t1$1 = new Date;
       }
     }
 
-    function yesdrag(view, noclick) {
+    function dragEnable(view, noclick) {
       var root = view.document.documentElement,
           selection = select(view).on("dragstart.drag", null);
       if (noclick) {
@@ -3416,7 +3528,7 @@ var     t1$1 = new Date;
         var gesture = beforestart("mouse", container.apply(this, arguments), mouse, this, arguments);
         if (!gesture) return;
         select(event.view).on("mousemove.drag", mousemoved, true).on("mouseup.drag", mouseupped, true);
-        nodrag(event.view);
+        dragDisable(event.view);
         nopropagation();
         mousemoving = false;
         gesture("start");
@@ -3430,7 +3542,7 @@ var     t1$1 = new Date;
 
       function mouseupped() {
         select(event.view).on("mousemove.drag mouseup.drag", null);
-        yesdrag(event.view, mousemoving);
+        dragEnable(event.view, mousemoving);
         noevent();
         gestures.mouse("end");
       }
@@ -3517,19 +3629,1549 @@ var     t1$1 = new Date;
       return drag;
     }
 
+    var frame = 0;
+    var timeout = 0;
+    var interval = 0;
+    var pokeDelay = 1000;
+    var taskHead;
+    var taskTail;
+    var clockLast = 0;
+    var clockNow = 0;
+    var clockSkew = 0;
+    var clock = typeof performance === "object" && performance.now ? performance : Date;
+    var setFrame = typeof requestAnimationFrame === "function"
+            ? (clock === Date ? function(f) { requestAnimationFrame(function() { f(clock.now()); }); } : requestAnimationFrame)
+            : function(f) { setTimeout(f, 17); };
+    function now() {
+      return clockNow || (setFrame(clearNow), clockNow = clock.now() + clockSkew);
+    }
+
+    function clearNow() {
+      clockNow = 0;
+    }
+
+    function Timer() {
+      this._call =
+      this._time =
+      this._next = null;
+    }
+
+    Timer.prototype = timer.prototype = {
+      constructor: Timer,
+      restart: function(callback, delay, time) {
+        if (typeof callback !== "function") throw new TypeError("callback is not a function");
+        time = (time == null ? now() : +time) + (delay == null ? 0 : +delay);
+        if (!this._next && taskTail !== this) {
+          if (taskTail) taskTail._next = this;
+          else taskHead = this;
+          taskTail = this;
+        }
+        this._call = callback;
+        this._time = time;
+        sleep();
+      },
+      stop: function() {
+        if (this._call) {
+          this._call = null;
+          this._time = Infinity;
+          sleep();
+        }
+      }
+    };
+
+    function timer(callback, delay, time) {
+      var t = new Timer;
+      t.restart(callback, delay, time);
+      return t;
+    }
+
+    function timerFlush() {
+      now(); // Get the current time, if not already set.
+      ++frame; // Pretend we’ve set an alarm, if we haven’t already.
+      var t = taskHead, e;
+      while (t) {
+        if ((e = clockNow - t._time) >= 0) t._call.call(null, e);
+        t = t._next;
+      }
+      --frame;
+    }
+
+    function wake(time) {
+      clockNow = (clockLast = time || clock.now()) + clockSkew;
+      frame = timeout = 0;
+      try {
+        timerFlush();
+      } finally {
+        frame = 0;
+        nap();
+        clockNow = 0;
+      }
+    }
+
+    function poke() {
+      var now = clock.now(), delay = now - clockLast;
+      if (delay > pokeDelay) clockSkew -= delay, clockLast = now;
+    }
+
+    function nap() {
+      var t0, t1 = taskHead, t2, time = Infinity;
+      while (t1) {
+        if (t1._call) {
+          if (time > t1._time) time = t1._time;
+          t0 = t1, t1 = t1._next;
+        } else {
+          t2 = t1._next, t1._next = null;
+          t1 = t0 ? t0._next = t2 : taskHead = t2;
+        }
+      }
+      taskTail = t0;
+      sleep(time);
+    }
+
+    function sleep(time) {
+      if (frame) return; // Soonest alarm already set, or will be.
+      if (timeout) timeout = clearTimeout(timeout);
+      var delay = time - clockNow;
+      if (delay > 24) {
+        if (time < Infinity) timeout = setTimeout(wake, delay);
+        if (interval) interval = clearInterval(interval);
+      } else {
+        if (!interval) interval = setInterval(poke, pokeDelay);
+        frame = 1, setFrame(wake);
+      }
+    }
+
+    function timeout$1(callback, delay, time) {
+      var t = new Timer;
+      delay = delay == null ? 0 : +delay;
+      t.restart(function(elapsed) {
+        t.stop();
+        callback(elapsed + delay);
+      }, delay, time);
+      return t;
+    }
+
+    var emptyOn = dispatch("start", "end", "interrupt");
+    var emptyTween = [];
+
+    var CREATED = 0;
+    var SCHEDULED = 1;
+    var STARTING = 2;
+    var STARTED = 3;
+    var ENDING = 4;
+    var ENDED = 5;
+
+    function schedule(node, name, id, index, group, timing) {
+      var schedules = node.__transition;
+      if (!schedules) node.__transition = {};
+      else if (id in schedules) return;
+      create(node, id, {
+        name: name,
+        index: index, // For context during callback.
+        group: group, // For context during callback.
+        on: emptyOn,
+        tween: emptyTween,
+        time: timing.time,
+        delay: timing.delay,
+        duration: timing.duration,
+        ease: timing.ease,
+        timer: null,
+        state: CREATED
+      });
+    }
+
+    function init(node, id) {
+      var schedule = node.__transition;
+      if (!schedule || !(schedule = schedule[id]) || schedule.state > CREATED) throw new Error("too late");
+      return schedule;
+    }
+
+    function set$2(node, id) {
+      var schedule = node.__transition;
+      if (!schedule || !(schedule = schedule[id]) || schedule.state > STARTING) throw new Error("too late");
+      return schedule;
+    }
+
+    function get$1(node, id) {
+      var schedule = node.__transition;
+      if (!schedule || !(schedule = schedule[id])) throw new Error("too late");
+      return schedule;
+    }
+
+    function create(node, id, self) {
+      var schedules = node.__transition,
+          tween;
+
+      // Initialize the self timer when the transition is created.
+      // Note the actual delay is not known until the first callback!
+      schedules[id] = self;
+      self.timer = timer(schedule, 0, self.time);
+
+      // If the delay is greater than this first sleep, sleep some more;
+      // otherwise, start immediately.
+      function schedule(elapsed) {
+        self.state = SCHEDULED;
+        if (self.delay <= elapsed) start(elapsed - self.delay);
+        else self.timer.restart(start, self.delay, self.time);
+      }
+
+      function start(elapsed) {
+        var i, j, n, o;
+
+        for (i in schedules) {
+          o = schedules[i];
+          if (o.name !== self.name) continue;
+
+          // Interrupt the active transition, if any.
+          // Dispatch the interrupt event.
+          if (o.state === STARTED) {
+            o.state = ENDED;
+            o.timer.stop();
+            o.on.call("interrupt", node, node.__data__, o.index, o.group);
+            delete schedules[i];
+          }
+
+          // Cancel any pre-empted transitions. No interrupt event is dispatched
+          // because the cancelled transitions never started. Note that this also
+          // removes this transition from the pending list!
+          else if (+i < id) {
+            o.state = ENDED;
+            o.timer.stop();
+            delete schedules[i];
+          }
+        }
+
+        // Defer the first tick to end of the current frame; see mbostock/d3#1576.
+        // Note the transition may be canceled after start and before the first tick!
+        // Note this must be scheduled before the start event; see d3/d3-transition#16!
+        // Assuming this is successful, subsequent callbacks go straight to tick.
+        timeout$1(function() {
+          if (self.state === STARTED) {
+            self.timer.restart(tick, self.delay, self.time);
+            tick(elapsed);
+          }
+        });
+
+        // Dispatch the start event.
+        // Note this must be done before the tween are initialized.
+        self.state = STARTING;
+        self.on.call("start", node, node.__data__, self.index, self.group);
+        if (self.state !== STARTING) return; // interrupted
+        self.state = STARTED;
+
+        // Initialize the tween, deleting null tween.
+        tween = new Array(n = self.tween.length);
+        for (i = 0, j = -1; i < n; ++i) {
+          if (o = self.tween[i].value.call(node, node.__data__, self.index, self.group)) {
+            tween[++j] = o;
+          }
+        }
+        tween.length = j + 1;
+      }
+
+      function tick(elapsed) {
+        var t = elapsed < self.duration ? self.ease.call(null, elapsed / self.duration) : (self.state = ENDING, 1),
+            i = -1,
+            n = tween.length;
+
+        while (++i < n) {
+          tween[i].call(null, t);
+        }
+
+        // Dispatch the end event.
+        if (self.state === ENDING) {
+          self.state = ENDED;
+          self.timer.stop();
+          self.on.call("end", node, node.__data__, self.index, self.group);
+          for (i in schedules) if (+i !== id) return void delete schedules[id];
+          delete node.__transition;
+        }
+      }
+    }
+
+    function interrupt(node, name) {
+      var schedules = node.__transition,
+          schedule,
+          active,
+          empty = true,
+          i;
+
+      if (!schedules) return;
+
+      name = name == null ? null : name + "";
+
+      for (i in schedules) {
+        if ((schedule = schedules[i]).name !== name) { empty = false; continue; }
+        active = schedule.state === STARTED;
+        schedule.state = ENDED;
+        schedule.timer.stop();
+        if (active) schedule.on.call("interrupt", node, node.__data__, schedule.index, schedule.group);
+        delete schedules[i];
+      }
+
+      if (empty) delete node.__transition;
+    }
+
+    function selection_interrupt(name) {
+      return this.each(function() {
+        interrupt(this, name);
+      });
+    }
+
+    function tweenRemove(id, name) {
+      var tween0, tween1;
+      return function() {
+        var schedule = set$2(this, id),
+            tween = schedule.tween;
+
+        // If this node shared tween with the previous node,
+        // just assign the updated shared tween and we’re done!
+        // Otherwise, copy-on-write.
+        if (tween !== tween0) {
+          tween1 = tween0 = tween;
+          for (var i = 0, n = tween1.length; i < n; ++i) {
+            if (tween1[i].name === name) {
+              tween1 = tween1.slice();
+              tween1.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        schedule.tween = tween1;
+      };
+    }
+
+    function tweenFunction(id, name, value) {
+      var tween0, tween1;
+      if (typeof value !== "function") throw new Error;
+      return function() {
+        var schedule = set$2(this, id),
+            tween = schedule.tween;
+
+        // If this node shared tween with the previous node,
+        // just assign the updated shared tween and we’re done!
+        // Otherwise, copy-on-write.
+        if (tween !== tween0) {
+          tween1 = (tween0 = tween).slice();
+          for (var t = {name: name, value: value}, i = 0, n = tween1.length; i < n; ++i) {
+            if (tween1[i].name === name) {
+              tween1[i] = t;
+              break;
+            }
+          }
+          if (i === n) tween1.push(t);
+        }
+
+        schedule.tween = tween1;
+      };
+    }
+
+    function transition_tween(name, value) {
+      var id = this._id;
+
+      name += "";
+
+      if (arguments.length < 2) {
+        var tween = get$1(this.node(), id).tween;
+        for (var i = 0, n = tween.length, t; i < n; ++i) {
+          if ((t = tween[i]).name === name) {
+            return t.value;
+          }
+        }
+        return null;
+      }
+
+      return this.each((value == null ? tweenRemove : tweenFunction)(id, name, value));
+    }
+
+    function tweenValue(transition, name, value) {
+      var id = transition._id;
+
+      transition.each(function() {
+        var schedule = set$2(this, id);
+        (schedule.value || (schedule.value = {}))[name] = value.apply(this, arguments);
+      });
+
+      return function(node) {
+        return get$1(node, id).value[name];
+      };
+    }
+
+    function interpolate$1(a, b) {
+      var c;
+      return (typeof b === "number" ? interpolateNumber
+          : b instanceof color ? interpolateRgb
+          : (c = color(b)) ? (b = c, interpolateRgb)
+          : interpolateString)(a, b);
+    }
+
+    function attrRemove$1(name) {
+      return function() {
+        this.removeAttribute(name);
+      };
+    }
+
+    function attrRemoveNS$1(fullname) {
+      return function() {
+        this.removeAttributeNS(fullname.space, fullname.local);
+      };
+    }
+
+    function attrConstant$1(name, interpolate, value1) {
+      var value00,
+          interpolate0;
+      return function() {
+        var value0 = this.getAttribute(name);
+        return value0 === value1 ? null
+            : value0 === value00 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value1);
+      };
+    }
+
+    function attrConstantNS$1(fullname, interpolate, value1) {
+      var value00,
+          interpolate0;
+      return function() {
+        var value0 = this.getAttributeNS(fullname.space, fullname.local);
+        return value0 === value1 ? null
+            : value0 === value00 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value1);
+      };
+    }
+
+    function attrFunction$1(name, interpolate, value) {
+      var value00,
+          value10,
+          interpolate0;
+      return function() {
+        var value0, value1 = value(this);
+        if (value1 == null) return void this.removeAttribute(name);
+        value0 = this.getAttribute(name);
+        return value0 === value1 ? null
+            : value0 === value00 && value1 === value10 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value10 = value1);
+      };
+    }
+
+    function attrFunctionNS$1(fullname, interpolate, value) {
+      var value00,
+          value10,
+          interpolate0;
+      return function() {
+        var value0, value1 = value(this);
+        if (value1 == null) return void this.removeAttributeNS(fullname.space, fullname.local);
+        value0 = this.getAttributeNS(fullname.space, fullname.local);
+        return value0 === value1 ? null
+            : value0 === value00 && value1 === value10 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value10 = value1);
+      };
+    }
+
+    function transition_attr(name, value) {
+      var fullname = namespace(name), i = fullname === "transform" ? interpolateTransform$2 : interpolate$1;
+      return this.attrTween(name, typeof value === "function"
+          ? (fullname.local ? attrFunctionNS$1 : attrFunction$1)(fullname, i, tweenValue(this, "attr." + name, value))
+          : value == null ? (fullname.local ? attrRemoveNS$1 : attrRemove$1)(fullname)
+          : (fullname.local ? attrConstantNS$1 : attrConstant$1)(fullname, i, value));
+    }
+
+    function attrTweenNS(fullname, value) {
+      function tween() {
+        var node = this, i = value.apply(node, arguments);
+        return i && function(t) {
+          node.setAttributeNS(fullname.space, fullname.local, i(t));
+        };
+      }
+      tween._value = value;
+      return tween;
+    }
+
+    function attrTween(name, value) {
+      function tween() {
+        var node = this, i = value.apply(node, arguments);
+        return i && function(t) {
+          node.setAttribute(name, i(t));
+        };
+      }
+      tween._value = value;
+      return tween;
+    }
+
+    function transition_attrTween(name, value) {
+      var key = "attr." + name;
+      if (arguments.length < 2) return (key = this.tween(key)) && key._value;
+      if (value == null) return this.tween(key, null);
+      if (typeof value !== "function") throw new Error;
+      var fullname = namespace(name);
+      return this.tween(key, (fullname.local ? attrTweenNS : attrTween)(fullname, value));
+    }
+
+    function delayFunction(id, value) {
+      return function() {
+        init(this, id).delay = +value.apply(this, arguments);
+      };
+    }
+
+    function delayConstant(id, value) {
+      return value = +value, function() {
+        init(this, id).delay = value;
+      };
+    }
+
+    function transition_delay(value) {
+      var id = this._id;
+
+      return arguments.length
+          ? this.each((typeof value === "function"
+              ? delayFunction
+              : delayConstant)(id, value))
+          : get$1(this.node(), id).delay;
+    }
+
+    function durationFunction(id, value) {
+      return function() {
+        set$2(this, id).duration = +value.apply(this, arguments);
+      };
+    }
+
+    function durationConstant(id, value) {
+      return value = +value, function() {
+        set$2(this, id).duration = value;
+      };
+    }
+
+    function transition_duration(value) {
+      var id = this._id;
+
+      return arguments.length
+          ? this.each((typeof value === "function"
+              ? durationFunction
+              : durationConstant)(id, value))
+          : get$1(this.node(), id).duration;
+    }
+
+    function easeConstant(id, value) {
+      if (typeof value !== "function") throw new Error;
+      return function() {
+        set$2(this, id).ease = value;
+      };
+    }
+
+    function transition_ease(value) {
+      var id = this._id;
+
+      return arguments.length
+          ? this.each(easeConstant(id, value))
+          : get$1(this.node(), id).ease;
+    }
+
+    function transition_filter(match) {
+      if (typeof match !== "function") match = matcher$1(match);
+
+      for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, subgroup = subgroups[j] = [], node, i = 0; i < n; ++i) {
+          if ((node = group[i]) && match.call(node, node.__data__, i, group)) {
+            subgroup.push(node);
+          }
+        }
+      }
+
+      return new Transition(subgroups, this._parents, this._name, this._id);
+    }
+
+    function transition_merge(transition) {
+      if (transition._id !== this._id) throw new Error;
+
+      for (var groups0 = this._groups, groups1 = transition._groups, m0 = groups0.length, m1 = groups1.length, m = Math.min(m0, m1), merges = new Array(m0), j = 0; j < m; ++j) {
+        for (var group0 = groups0[j], group1 = groups1[j], n = group0.length, merge = merges[j] = new Array(n), node, i = 0; i < n; ++i) {
+          if (node = group0[i] || group1[i]) {
+            merge[i] = node;
+          }
+        }
+      }
+
+      for (; j < m0; ++j) {
+        merges[j] = groups0[j];
+      }
+
+      return new Transition(merges, this._parents, this._name, this._id);
+    }
+
+    function start(name) {
+      return (name + "").trim().split(/^|\s+/).every(function(t) {
+        var i = t.indexOf(".");
+        if (i >= 0) t = t.slice(0, i);
+        return !t || t === "start";
+      });
+    }
+
+    function onFunction(id, name, listener) {
+      var on0, on1, sit = start(name) ? init : set$2;
+      return function() {
+        var schedule = sit(this, id),
+            on = schedule.on;
+
+        // If this node shared a dispatch with the previous node,
+        // just assign the updated shared dispatch and we’re done!
+        // Otherwise, copy-on-write.
+        if (on !== on0) (on1 = (on0 = on).copy()).on(name, listener);
+
+        schedule.on = on1;
+      };
+    }
+
+    function transition_on(name, listener) {
+      var id = this._id;
+
+      return arguments.length < 2
+          ? get$1(this.node(), id).on.on(name)
+          : this.each(onFunction(id, name, listener));
+    }
+
+    function removeFunction(id) {
+      return function() {
+        var parent = this.parentNode;
+        for (var i in this.__transition) if (+i !== id) return;
+        if (parent) parent.removeChild(this);
+      };
+    }
+
+    function transition_remove() {
+      return this.on("end.remove", removeFunction(this._id));
+    }
+
+    function transition_select(select) {
+      var name = this._name,
+          id = this._id;
+
+      if (typeof select !== "function") select = selector(select);
+
+      for (var groups = this._groups, m = groups.length, subgroups = new Array(m), j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, subgroup = subgroups[j] = new Array(n), node, subnode, i = 0; i < n; ++i) {
+          if ((node = group[i]) && (subnode = select.call(node, node.__data__, i, group))) {
+            if ("__data__" in node) subnode.__data__ = node.__data__;
+            subgroup[i] = subnode;
+            schedule(subgroup[i], name, id, i, subgroup, get$1(node, id));
+          }
+        }
+      }
+
+      return new Transition(subgroups, this._parents, name, id);
+    }
+
+    function transition_selectAll(select) {
+      var name = this._name,
+          id = this._id;
+
+      if (typeof select !== "function") select = selectorAll(select);
+
+      for (var groups = this._groups, m = groups.length, subgroups = [], parents = [], j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) {
+          if (node = group[i]) {
+            for (var children = select.call(node, node.__data__, i, group), child, inherit = get$1(node, id), k = 0, l = children.length; k < l; ++k) {
+              if (child = children[k]) {
+                schedule(child, name, id, k, children, inherit);
+              }
+            }
+            subgroups.push(children);
+            parents.push(node);
+          }
+        }
+      }
+
+      return new Transition(subgroups, parents, name, id);
+    }
+
+    var Selection$1 = selection.prototype.constructor;
+
+    function transition_selection() {
+      return new Selection$1(this._groups, this._parents);
+    }
+
+    function styleRemove$1(name, interpolate) {
+      var value00,
+          value10,
+          interpolate0;
+      return function() {
+        var style = window(this).getComputedStyle(this, null),
+            value0 = style.getPropertyValue(name),
+            value1 = (this.style.removeProperty(name), style.getPropertyValue(name));
+        return value0 === value1 ? null
+            : value0 === value00 && value1 === value10 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value10 = value1);
+      };
+    }
+
+    function styleRemoveEnd(name) {
+      return function() {
+        this.style.removeProperty(name);
+      };
+    }
+
+    function styleConstant$1(name, interpolate, value1) {
+      var value00,
+          interpolate0;
+      return function() {
+        var value0 = window(this).getComputedStyle(this, null).getPropertyValue(name);
+        return value0 === value1 ? null
+            : value0 === value00 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value1);
+      };
+    }
+
+    function styleFunction$1(name, interpolate, value) {
+      var value00,
+          value10,
+          interpolate0;
+      return function() {
+        var style = window(this).getComputedStyle(this, null),
+            value0 = style.getPropertyValue(name),
+            value1 = value(this);
+        if (value1 == null) value1 = (this.style.removeProperty(name), style.getPropertyValue(name));
+        return value0 === value1 ? null
+            : value0 === value00 && value1 === value10 ? interpolate0
+            : interpolate0 = interpolate(value00 = value0, value10 = value1);
+      };
+    }
+
+    function transition_style(name, value, priority) {
+      var i = (name += "") === "transform" ? interpolateTransform$1 : interpolate$1;
+      return value == null ? this
+              .styleTween(name, styleRemove$1(name, i))
+              .on("end.style." + name, styleRemoveEnd(name))
+          : this.styleTween(name, typeof value === "function"
+              ? styleFunction$1(name, i, tweenValue(this, "style." + name, value))
+              : styleConstant$1(name, i, value), priority);
+    }
+
+    function styleTween(name, value, priority) {
+      function tween() {
+        var node = this, i = value.apply(node, arguments);
+        return i && function(t) {
+          node.style.setProperty(name, i(t), priority);
+        };
+      }
+      tween._value = value;
+      return tween;
+    }
+
+    function transition_styleTween(name, value, priority) {
+      var key = "style." + (name += "");
+      if (arguments.length < 2) return (key = this.tween(key)) && key._value;
+      if (value == null) return this.tween(key, null);
+      if (typeof value !== "function") throw new Error;
+      return this.tween(key, styleTween(name, value, priority == null ? "" : priority));
+    }
+
+    function textConstant$1(value) {
+      return function() {
+        this.textContent = value;
+      };
+    }
+
+    function textFunction$1(value) {
+      return function() {
+        var value1 = value(this);
+        this.textContent = value1 == null ? "" : value1;
+      };
+    }
+
+    function transition_text(value) {
+      return this.tween("text", typeof value === "function"
+          ? textFunction$1(tweenValue(this, "text", value))
+          : textConstant$1(value == null ? "" : value + ""));
+    }
+
+    function transition_transition() {
+      var name = this._name,
+          id0 = this._id,
+          id1 = newId();
+
+      for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) {
+          if (node = group[i]) {
+            var inherit = get$1(node, id0);
+            schedule(node, name, id1, i, group, {
+              time: inherit.time + inherit.delay + inherit.duration,
+              delay: 0,
+              duration: inherit.duration,
+              ease: inherit.ease
+            });
+          }
+        }
+      }
+
+      return new Transition(groups, this._parents, name, id1);
+    }
+
+    var id = 0;
+
+    function Transition(groups, parents, name, id) {
+      this._groups = groups;
+      this._parents = parents;
+      this._name = name;
+      this._id = id;
+    }
+
+    function transition(name) {
+      return selection().transition(name);
+    }
+
+    function newId() {
+      return ++id;
+    }
+
+    var selection_prototype = selection.prototype;
+
+    Transition.prototype = transition.prototype = {
+      constructor: Transition,
+      select: transition_select,
+      selectAll: transition_selectAll,
+      filter: transition_filter,
+      merge: transition_merge,
+      selection: transition_selection,
+      transition: transition_transition,
+      call: selection_prototype.call,
+      nodes: selection_prototype.nodes,
+      node: selection_prototype.node,
+      size: selection_prototype.size,
+      empty: selection_prototype.empty,
+      each: selection_prototype.each,
+      on: transition_on,
+      attr: transition_attr,
+      attrTween: transition_attrTween,
+      style: transition_style,
+      styleTween: transition_styleTween,
+      text: transition_text,
+      remove: transition_remove,
+      tween: transition_tween,
+      delay: transition_delay,
+      duration: transition_duration,
+      ease: transition_ease
+    };
+
+    function cubicInOut(t) {
+      return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
+    }
+
+    var exponent$1 = 3;
+
+    var polyIn = (function custom(e) {
+      e = +e;
+
+      function polyIn(t) {
+        return Math.pow(t, e);
+      }
+
+      polyIn.exponent = custom;
+
+      return polyIn;
+    })(exponent$1);
+
+    var polyOut = (function custom(e) {
+      e = +e;
+
+      function polyOut(t) {
+        return 1 - Math.pow(1 - t, e);
+      }
+
+      polyOut.exponent = custom;
+
+      return polyOut;
+    })(exponent$1);
+
+    var polyInOut = (function custom(e) {
+      e = +e;
+
+      function polyInOut(t) {
+        return ((t *= 2) <= 1 ? Math.pow(t, e) : 2 - Math.pow(2 - t, e)) / 2;
+      }
+
+      polyInOut.exponent = custom;
+
+      return polyInOut;
+    })(exponent$1);
+
+    var overshoot = 1.70158;
+
+    var backIn = (function custom(s) {
+      s = +s;
+
+      function backIn(t) {
+        return t * t * ((s + 1) * t - s);
+      }
+
+      backIn.overshoot = custom;
+
+      return backIn;
+    })(overshoot);
+
+    var backOut = (function custom(s) {
+      s = +s;
+
+      function backOut(t) {
+        return --t * t * ((s + 1) * t + s) + 1;
+      }
+
+      backOut.overshoot = custom;
+
+      return backOut;
+    })(overshoot);
+
+    var backInOut = (function custom(s) {
+      s = +s;
+
+      function backInOut(t) {
+        return ((t *= 2) < 1 ? t * t * ((s + 1) * t - s) : (t -= 2) * t * ((s + 1) * t + s) + 2) / 2;
+      }
+
+      backInOut.overshoot = custom;
+
+      return backInOut;
+    })(overshoot);
+
+    var tau = 2 * Math.PI;
+    var amplitude = 1;
+    var period = 0.3;
+    var elasticIn = (function custom(a, p) {
+      var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau);
+
+      function elasticIn(t) {
+        return a * Math.pow(2, 10 * --t) * Math.sin((s - t) / p);
+      }
+
+      elasticIn.amplitude = function(a) { return custom(a, p * tau); };
+      elasticIn.period = function(p) { return custom(a, p); };
+
+      return elasticIn;
+    })(amplitude, period);
+
+    var elasticOut = (function custom(a, p) {
+      var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau);
+
+      function elasticOut(t) {
+        return 1 - a * Math.pow(2, -10 * (t = +t)) * Math.sin((t + s) / p);
+      }
+
+      elasticOut.amplitude = function(a) { return custom(a, p * tau); };
+      elasticOut.period = function(p) { return custom(a, p); };
+
+      return elasticOut;
+    })(amplitude, period);
+
+    var elasticInOut = (function custom(a, p) {
+      var s = Math.asin(1 / (a = Math.max(1, a))) * (p /= tau);
+
+      function elasticInOut(t) {
+        return ((t = t * 2 - 1) < 0
+            ? a * Math.pow(2, 10 * t) * Math.sin((s - t) / p)
+            : 2 - a * Math.pow(2, -10 * t) * Math.sin((s + t) / p)) / 2;
+      }
+
+      elasticInOut.amplitude = function(a) { return custom(a, p * tau); };
+      elasticInOut.period = function(p) { return custom(a, p); };
+
+      return elasticInOut;
+    })(amplitude, period);
+
+    var defaultTiming = {
+      time: null, // Set on use.
+      delay: 0,
+      duration: 250,
+      ease: cubicInOut
+    };
+
+    function inherit(node, id) {
+      var timing;
+      while (!(timing = node.__transition) || !(timing = timing[id])) {
+        if (!(node = node.parentNode)) {
+          return defaultTiming.time = now(), defaultTiming;
+        }
+      }
+      return timing;
+    }
+
+    function selection_transition(name) {
+      var id,
+          timing;
+
+      if (name instanceof Transition) {
+        id = name._id, name = name._name;
+      } else {
+        id = newId(), (timing = defaultTiming).time = now(), name = name == null ? null : name + "";
+      }
+
+      for (var groups = this._groups, m = groups.length, j = 0; j < m; ++j) {
+        for (var group = groups[j], n = group.length, node, i = 0; i < n; ++i) {
+          if (node = group[i]) {
+            schedule(node, name, id, i, group, timing || inherit(node, id));
+          }
+        }
+      }
+
+      return new Transition(groups, this._parents, name, id);
+    }
+
+    selection.prototype.interrupt = selection_interrupt;
+    selection.prototype.transition = selection_transition;
+
+    function constant$5(x) {
+      return function() {
+        return x;
+      };
+    }
+
+    function BrushEvent(target, type, selection) {
+      this.target = target;
+      this.type = type;
+      this.selection = selection;
+    }
+
+    function nopropagation$1() {
+      event.stopImmediatePropagation();
+    }
+
+    function noevent$1() {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+
+    var MODE_DRAG = {name: "drag"};
+    var MODE_SPACE = {name: "space"};
+    var MODE_HANDLE = {name: "handle"};
+    var MODE_CENTER = {name: "center"};
+    var X = {
+      name: "x",
+      handles: ["e", "w"].map(type),
+      input: function(x, e) { return x && [[x[0], e[0][1]], [x[1], e[1][1]]]; },
+      output: function(xy) { return xy && [xy[0][0], xy[1][0]]; }
+    };
+
+    var Y = {
+      name: "y",
+      handles: ["n", "s"].map(type),
+      input: function(y, e) { return y && [[e[0][0], y[0]], [e[1][0], y[1]]]; },
+      output: function(xy) { return xy && [xy[0][1], xy[1][1]]; }
+    };
+
+    var XY = {
+      name: "xy",
+      handles: ["n", "e", "s", "w", "nw", "ne", "se", "sw"].map(type),
+      input: function(xy) { return xy; },
+      output: function(xy) { return xy; }
+    };
+
+    var cursors = {
+      overlay: "crosshair",
+      selection: "move",
+      n: "ns-resize",
+      e: "ew-resize",
+      s: "ns-resize",
+      w: "ew-resize",
+      nw: "nwse-resize",
+      ne: "nesw-resize",
+      se: "nwse-resize",
+      sw: "nesw-resize"
+    };
+
+    var flipX = {
+      e: "w",
+      w: "e",
+      nw: "ne",
+      ne: "nw",
+      se: "sw",
+      sw: "se"
+    };
+
+    var flipY = {
+      n: "s",
+      s: "n",
+      nw: "sw",
+      ne: "se",
+      se: "ne",
+      sw: "nw"
+    };
+
+    var signsX = {
+      overlay: +1,
+      selection: +1,
+      n: null,
+      e: +1,
+      s: null,
+      w: -1,
+      nw: -1,
+      ne: +1,
+      se: +1,
+      sw: -1
+    };
+
+    var signsY = {
+      overlay: +1,
+      selection: +1,
+      n: -1,
+      e: null,
+      s: +1,
+      w: null,
+      nw: -1,
+      ne: -1,
+      se: +1,
+      sw: +1
+    };
+
+    function type(t) {
+      return {type: t};
+    }
+
+    // Ignore right-click, since that should open the context menu.
+    function defaultFilter$1() {
+      return !event.button;
+    }
+
+    function defaultExtent() {
+      var svg = this.ownerSVGElement || this;
+      return [[0, 0], [svg.width.baseVal.value, svg.height.baseVal.value]];
+    }
+
+    // Like d3.local, but with the name “__brush” rather than auto-generated.
+    function local$1(node) {
+      while (!node.__brush) if (!(node = node.parentNode)) return;
+      return node.__brush;
+    }
+
+    function empty$1(extent) {
+      return extent[0][0] === extent[1][0]
+          || extent[0][1] === extent[1][1];
+    }
+
+    function brushX() {
+      return brush$1(X);
+    }
+
+    function brush$1(dim) {
+      var extent = defaultExtent,
+          filter = defaultFilter$1,
+          listeners = dispatch(brush, "start", "brush", "end"),
+          handleSize = 6,
+          touchending;
+
+      function brush(group) {
+        var overlay = group
+            .property("__brush", initialize)
+          .selectAll(".overlay")
+          .data([type("overlay")]);
+
+        overlay.enter().append("rect")
+            .attr("class", "overlay")
+            .attr("pointer-events", "all")
+            .attr("cursor", cursors.overlay)
+          .merge(overlay)
+            .each(function() {
+              var extent = local$1(this).extent;
+              select(this)
+                  .attr("x", extent[0][0])
+                  .attr("y", extent[0][1])
+                  .attr("width", extent[1][0] - extent[0][0])
+                  .attr("height", extent[1][1] - extent[0][1]);
+            });
+
+        group.selectAll(".selection")
+          .data([type("selection")])
+          .enter().append("rect")
+            .attr("class", "selection")
+            .attr("cursor", cursors.selection)
+            .attr("fill", "#777")
+            .attr("fill-opacity", 0.3)
+            .attr("stroke", "#fff")
+            .attr("shape-rendering", "crispEdges");
+
+        var handle = group.selectAll(".handle")
+          .data(dim.handles, function(d) { return d.type; });
+
+        handle.exit().remove();
+
+        handle.enter().append("rect")
+            .attr("class", function(d) { return "handle handle--" + d.type; })
+            .attr("cursor", function(d) { return cursors[d.type]; });
+
+        group
+            .each(redraw)
+            .attr("fill", "none")
+            .attr("pointer-events", "all")
+            .style("-webkit-tap-highlight-color", "rgba(0,0,0,0)")
+            .on("mousedown.brush touchstart.brush", started);
+      }
+
+      brush.move = function(group, selection) {
+        if (group.selection) {
+          group
+              .on("start.brush", function() { emitter(this, arguments).beforestart().start(); })
+              .on("interrupt.brush end.brush", function() { emitter(this, arguments).end(); })
+              .tween("brush", function() {
+                var that = this,
+                    state = that.__brush,
+                    emit = emitter(that, arguments),
+                    selection0 = state.selection,
+                    selection1 = dim.input(typeof selection === "function" ? selection.apply(this, arguments) : selection, state.extent),
+                    i = interpolate(selection0, selection1);
+
+                function tween(t) {
+                  state.selection = t === 1 && empty$1(selection1) ? null : i(t);
+                  redraw.call(that);
+                  emit.brush();
+                }
+
+                return selection0 && selection1 ? tween : tween(1);
+              });
+        } else {
+          group
+              .each(function() {
+                var that = this,
+                    args = arguments,
+                    state = that.__brush,
+                    selection1 = dim.input(typeof selection === "function" ? selection.apply(that, args) : selection, state.extent),
+                    emit = emitter(that, args).beforestart();
+
+                interrupt(that);
+                state.selection = selection1 == null || empty$1(selection1) ? null : selection1;
+                redraw.call(that);
+                emit.start().brush().end();
+              });
+        }
+      };
+
+      function redraw() {
+        var group = select(this),
+            selection = local$1(this).selection;
+
+        if (selection) {
+          group.selectAll(".selection")
+              .style("display", null)
+              .attr("x", selection[0][0])
+              .attr("y", selection[0][1])
+              .attr("width", selection[1][0] - selection[0][0])
+              .attr("height", selection[1][1] - selection[0][1]);
+
+          group.selectAll(".handle")
+              .style("display", null)
+              .attr("x", function(d) { return d.type[d.type.length - 1] === "e" ? selection[1][0] - handleSize / 2 : selection[0][0] - handleSize / 2; })
+              .attr("y", function(d) { return d.type[0] === "s" ? selection[1][1] - handleSize / 2 : selection[0][1] - handleSize / 2; })
+              .attr("width", function(d) { return d.type === "n" || d.type === "s" ? selection[1][0] - selection[0][0] + handleSize : handleSize; })
+              .attr("height", function(d) { return d.type === "e" || d.type === "w" ? selection[1][1] - selection[0][1] + handleSize : handleSize; });
+        }
+
+        else {
+          group.selectAll(".selection,.handle")
+              .style("display", "none")
+              .attr("x", null)
+              .attr("y", null)
+              .attr("width", null)
+              .attr("height", null);
+        }
+      }
+
+      function emitter(that, args) {
+        return that.__brush.emitter || new Emitter(that, args);
+      }
+
+      function Emitter(that, args) {
+        this.that = that;
+        this.args = args;
+        this.state = that.__brush;
+        this.active = 0;
+      }
+
+      Emitter.prototype = {
+        beforestart: function() {
+          if (++this.active === 1) this.state.emitter = this, this.starting = true;
+          return this;
+        },
+        start: function() {
+          if (this.starting) this.starting = false, this.emit("start");
+          return this;
+        },
+        brush: function() {
+          this.emit("brush");
+          return this;
+        },
+        end: function() {
+          if (--this.active === 0) delete this.state.emitter, this.emit("end");
+          return this;
+        },
+        emit: function(type) {
+          customEvent(new BrushEvent(brush, type, dim.output(this.state.selection)), listeners.apply, listeners, [type, this.that, this.args]);
+        }
+      };
+
+      function started() {
+        if (event.touches) { if (event.changedTouches.length < event.touches.length) return noevent$1(); }
+        else if (touchending) return;
+        if (!filter.apply(this, arguments)) return;
+
+        var that = this,
+            type = event.target.__data__.type,
+            mode = (event.metaKey ? type = "overlay" : type) === "selection" ? MODE_DRAG : (event.altKey ? MODE_CENTER : MODE_HANDLE),
+            signX = dim === Y ? null : signsX[type],
+            signY = dim === X ? null : signsY[type],
+            state = local$1(that),
+            extent = state.extent,
+            selection = state.selection,
+            W = extent[0][0], w0, w1,
+            N = extent[0][1], n0, n1,
+            E = extent[1][0], e0, e1,
+            S = extent[1][1], s0, s1,
+            dx,
+            dy,
+            moving,
+            shifting = signX && signY && event.shiftKey,
+            lockX,
+            lockY,
+            point0 = mouse(that),
+            point = point0,
+            emit = emitter(that, arguments).beforestart();
+
+        if (type === "overlay") {
+          state.selection = selection = [
+            [w0 = dim === Y ? W : point0[0], n0 = dim === X ? N : point0[1]],
+            [e0 = dim === Y ? E : w0, s0 = dim === X ? S : n0]
+          ];
+        } else {
+          w0 = selection[0][0];
+          n0 = selection[0][1];
+          e0 = selection[1][0];
+          s0 = selection[1][1];
+        }
+
+        w1 = w0;
+        n1 = n0;
+        e1 = e0;
+        s1 = s0;
+
+        var group = select(that)
+            .attr("pointer-events", "none");
+
+        var overlay = group.selectAll(".overlay")
+            .attr("cursor", cursors[type]);
+
+        if (event.touches) {
+          group
+              .on("touchmove.brush", moved, true)
+              .on("touchend.brush touchcancel.brush", ended, true);
+        } else {
+          var view = select(event.view)
+              .on("keydown.brush", keydowned, true)
+              .on("keyup.brush", keyupped, true)
+              .on("mousemove.brush", moved, true)
+              .on("mouseup.brush", ended, true);
+
+          dragDisable(event.view);
+        }
+
+        nopropagation$1();
+        interrupt(that);
+        redraw.call(that);
+        emit.start();
+
+        function moved() {
+          var point1 = mouse(that);
+          if (shifting && !lockX && !lockY) {
+            if (Math.abs(point1[0] - point[0]) > Math.abs(point1[1] - point[1])) lockY = true;
+            else lockX = true;
+          }
+          point = point1;
+          moving = true;
+          noevent$1();
+          move();
+        }
+
+        function move() {
+          var t;
+
+          dx = point[0] - point0[0];
+          dy = point[1] - point0[1];
+
+          switch (mode) {
+            case MODE_SPACE:
+            case MODE_DRAG: {
+              if (signX) dx = Math.max(W - w0, Math.min(E - e0, dx)), w1 = w0 + dx, e1 = e0 + dx;
+              if (signY) dy = Math.max(N - n0, Math.min(S - s0, dy)), n1 = n0 + dy, s1 = s0 + dy;
+              break;
+            }
+            case MODE_HANDLE: {
+              if (signX < 0) dx = Math.max(W - w0, Math.min(E - w0, dx)), w1 = w0 + dx, e1 = e0;
+              else if (signX > 0) dx = Math.max(W - e0, Math.min(E - e0, dx)), w1 = w0, e1 = e0 + dx;
+              if (signY < 0) dy = Math.max(N - n0, Math.min(S - n0, dy)), n1 = n0 + dy, s1 = s0;
+              else if (signY > 0) dy = Math.max(N - s0, Math.min(S - s0, dy)), n1 = n0, s1 = s0 + dy;
+              break;
+            }
+            case MODE_CENTER: {
+              if (signX) w1 = Math.max(W, Math.min(E, w0 - dx * signX)), e1 = Math.max(W, Math.min(E, e0 + dx * signX));
+              if (signY) n1 = Math.max(N, Math.min(S, n0 - dy * signY)), s1 = Math.max(N, Math.min(S, s0 + dy * signY));
+              break;
+            }
+          }
+
+          if (e1 < w1) {
+            signX *= -1;
+            t = w0, w0 = e0, e0 = t;
+            t = w1, w1 = e1, e1 = t;
+            if (type in flipX) overlay.attr("cursor", cursors[type = flipX[type]]);
+          }
+
+          if (s1 < n1) {
+            signY *= -1;
+            t = n0, n0 = s0, s0 = t;
+            t = n1, n1 = s1, s1 = t;
+            if (type in flipY) overlay.attr("cursor", cursors[type = flipY[type]]);
+          }
+
+          selection = state.selection; // May be set by brush.move!
+
+          if (lockX) w1 = selection[0][0], e1 = selection[1][0];
+          if (lockY) n1 = selection[0][1], s1 = selection[1][1];
+
+          if (selection[0][0] !== w1
+              || selection[0][1] !== n1
+              || selection[1][0] !== e1
+              || selection[1][1] !== s1) {
+            state.selection = [[w1, n1], [e1, s1]];
+            redraw.call(that);
+            emit.brush();
+          }
+        }
+
+        function ended() {
+          nopropagation$1();
+          if (event.touches) {
+            if (event.touches.length) return;
+            if (touchending) clearTimeout(touchending);
+            touchending = setTimeout(function() { touchending = null; }, 500); // Ghost clicks are delayed!
+            group.on("touchmove.brush touchend.brush touchcancel.brush", null);
+          } else {
+            dragEnable(event.view, moving);
+            view.on("keydown.brush keyup.brush mousemove.brush mouseup.brush", null);
+          }
+          group.attr("pointer-events", "all");
+          overlay.attr("cursor", cursors.overlay);
+          if (empty$1(selection)) state.selection = null, redraw.call(that);
+          emit.end();
+        }
+
+        function keydowned() {
+          switch (event.keyCode) {
+            case 16: { // SHIFT
+              shifting = signX && signY;
+              break;
+            }
+            case 18: { // ALT
+              if (mode === MODE_HANDLE) {
+                if (signX) e0 = e1 - dx * signX, w0 = w1 + dx * signX;
+                if (signY) s0 = s1 - dy * signY, n0 = n1 + dy * signY;
+                mode = MODE_CENTER;
+                move();
+              }
+              break;
+            }
+            case 32: { // SPACE; takes priority over ALT
+              if (mode === MODE_HANDLE || mode === MODE_CENTER) {
+                if (signX < 0) e0 = e1 - dx; else if (signX > 0) w0 = w1 - dx;
+                if (signY < 0) s0 = s1 - dy; else if (signY > 0) n0 = n1 - dy;
+                mode = MODE_SPACE;
+                overlay.attr("cursor", cursors.selection);
+                move();
+              }
+              break;
+            }
+            default: return;
+          }
+          noevent$1();
+        }
+
+        function keyupped() {
+          switch (event.keyCode) {
+            case 16: { // SHIFT
+              if (shifting) {
+                lockX = lockY = shifting = false;
+                move();
+              }
+              break;
+            }
+            case 18: { // ALT
+              if (mode === MODE_CENTER) {
+                if (signX < 0) e0 = e1; else if (signX > 0) w0 = w1;
+                if (signY < 0) s0 = s1; else if (signY > 0) n0 = n1;
+                mode = MODE_HANDLE;
+                move();
+              }
+              break;
+            }
+            case 32: { // SPACE
+              if (mode === MODE_SPACE) {
+                if (event.altKey) {
+                  if (signX) e0 = e1 - dx * signX, w0 = w1 + dx * signX;
+                  if (signY) s0 = s1 - dy * signY, n0 = n1 + dy * signY;
+                  mode = MODE_CENTER;
+                } else {
+                  if (signX < 0) e0 = e1; else if (signX > 0) w0 = w1;
+                  if (signY < 0) s0 = s1; else if (signY > 0) n0 = n1;
+                  mode = MODE_HANDLE;
+                }
+                overlay.attr("cursor", cursors[type]);
+                move();
+              }
+              break;
+            }
+            default: return;
+          }
+          noevent$1();
+        }
+      }
+
+      function initialize() {
+        var state = this.__brush || {selection: null};
+        state.extent = extent.apply(this, arguments);
+        state.dim = dim;
+        return state;
+      }
+
+      brush.extent = function(_) {
+        return arguments.length ? (extent = typeof _ === "function" ? _ : constant$5([[+_[0][0], +_[0][1]], [+_[1][0], +_[1][1]]]), brush) : extent;
+      };
+
+      brush.filter = function(_) {
+        return arguments.length ? (filter = typeof _ === "function" ? _ : constant$5(!!_), brush) : filter;
+      };
+
+      brush.handleSize = function(_) {
+        return arguments.length ? (handleSize = +_, brush) : handleSize;
+      };
+
+      brush.on = function() {
+        var value = listeners.on.apply(listeners, arguments);
+        return value === listeners ? brush : value;
+      };
+
+      return brush;
+    }
+
     var Chart = (function () {
         function Chart(selector, domain) {
             var _this = this;
             // Defaults
             this.width = 400;
-            this.height = 400;
+            this.height = 500;
+            this.brushHeight = 100;
             this.paddingTop = 30;
             this.paddingRight = 30;
-            this.paddingBottom = 30;
+            this.paddingBottom = 130;
             this.paddingLeft = 30;
             this.model = {
                 points: [],
-                idealLine: null,
+                idealLine: {
+                    start: null,
+                    end: null,
+                    userDefined: true
+                },
                 trainingLines: []
             };
             this.idealLineStartPoint = {
@@ -3576,17 +5218,17 @@ var     t1$1 = new Date;
                     y: 0
                 }
             };
-            this.trainingLine = {
-                slope: -1,
-                offset: 0
-            };
             this.mode = true;
             this.containgElement = select(selector);
             // Inject svg
             this.svg = this.containgElement
                 .append("svg")
                 .attr("width", '100%')
-                .attr("height", '100%');
+                .attr("height", (this.height - this.brushHeight) + "px");
+            this.brushSvg = this.containgElement
+                .append("svg")
+                .attr("width", '100%')
+                .attr("height", this.brushHeight + "px");
             // Create scales mapping domain coordinates to svg coordinates
             this.xScale = linear()
                 .domain(domain)
@@ -3597,14 +5239,16 @@ var     t1$1 = new Date;
             // Create axises
             var xAxis = axisBottom(this.xScale);
             var xAxisGrid = axisBottom(this.xScale)
-                .tickSize([this.width]);
+                .tickSize([this.width])
+                .tickPadding(1000);
             var yAxis = axisLeft(this.yScale);
             var yAxisGrid = axisLeft(this.yScale)
-                .tickSize([this.width]);
+                .tickSize([this.width])
+                .tickPadding(1000);
             // Draw Axises
             var xAxisGroup = this.svg
                 .append('g')
-                .attr('transform', "translate(0, " + (this.height) / 2 + ")")
+                .attr('transform', "translate(0, " + (this.height - this.brushHeight) / 2 + ")")
                 .classed('axis', true)
                 .classed('axis--x', true)
                 .classed('noselect', true)
@@ -3630,6 +5274,17 @@ var     t1$1 = new Date;
                 .classed('grid--y', true)
                 .classed('noselect', true)
                 .call(yAxisGrid);
+            // Draw brush
+            this.xAxisBrush = brushX()
+                .extent([[0, 0], [this.width - 20, 80]])
+                .on("brush", function () { return _this.brushed(); });
+            this.xAxisBrushGroup = this.brushSvg
+                .append('g')
+                .attr('transform', "translate(10, 10)")
+                .classed('brush', true);
+            ;
+            this.xAxisBrushGroup
+                .call(this.xAxisBrush);
             // Register Events
             this.svg.on('click', (function () {
                 var that = _this;
@@ -3659,14 +5314,16 @@ var     t1$1 = new Date;
                 .selectAll('line.division')
                 .remove('line');
         };
-        Chart.prototype.toggleMode = function () {
-            this.mode = !this.mode;
-            if (!this.mode) {
-                this.svg
-                    .call(this.dragBehavior);
-            }
-            else {
-                this.svg.on('.drag', null);
+        Chart.prototype.setMode = function (mode) {
+            if (this.mode !== mode) {
+                this.mode = mode;
+                if (!this.mode) {
+                    this.svg
+                        .call(this.dragBehavior);
+                }
+                else {
+                    this.svg.on('.drag', null);
+                }
             }
         };
         Chart.prototype.addPoint = function (x, y) {
@@ -3689,6 +5346,13 @@ var     t1$1 = new Date;
                 }
             });
             this.containgElement.node().dispatchEvent(customEvent);
+        };
+        Chart.prototype.brushed = function () {
+            var maxSize = this.width - 20;
+            this.brushPercentages = event.selection
+                .map(function (x) { return x / maxSize; });
+            console.log('brushed', event.selection, this.brushPercentages);
+            this.update(this.model);
         };
         Chart.prototype.dragStarted = function () {
             if (!this.mode) {
@@ -3818,16 +5482,16 @@ var     t1$1 = new Date;
                     this.idealLineEndPoint.normal.y = this.dragEndPoint.normal.y;
                     this.idealLineEndPoint.scaled.x = this.dragEndPoint.scaled.x;
                     this.idealLineEndPoint.scaled.y = this.dragEndPoint.scaled.y;
+                    this.model.idealLine = {
+                        start: this.idealLineStartPoint,
+                        end: this.idealLineEndPoint,
+                        userDefined: true
+                    };
                     var partionedPoints = this.model.points
                         .map(function (d) {
-                        d.result = (_this.crossProduct(d) > 0);
+                        d.result = (_this.crossProduct(_this.idealLineStartPoint.scaled, _this.idealLineEndPoint.scaled, d) > 0);
                         return d;
                     });
-                    var selection = this.svg
-                        .selectAll('circle')
-                        .data(this.model.points)
-                        .classed('circle--positive', function (d) { return d.result === true; })
-                        .classed('circle--negative', function (d) { return d.result === false; });
                     var customEvent = new CustomEvent("idealLineUpdated", {
                         detail: {
                             x1: this.idealLineStartPoint.scaled.x,
@@ -3843,13 +5507,10 @@ var     t1$1 = new Date;
                 }
             }
         };
-        Chart.prototype.crossProduct = function (d) {
-            var a = this.idealLineStartPoint.scaled;
-            var b = this.idealLineEndPoint.scaled;
-            var p = {
-                x: d.x,
-                y: d.y
-            };
+        Chart.prototype.moveBrush = function (brushBoundaries) {
+            this.xAxisBrush.move(this.xAxisBrushGroup, brushBoundaries);
+        };
+        Chart.prototype.crossProduct = function (a, b, p) {
             return ((b.x - a.x) * (p.y - a.y)) - ((b.y - a.y) * (p.x - a.x));
         };
         Chart.prototype.update = function (model) {
@@ -3864,17 +5525,25 @@ var     t1$1 = new Date;
                 .attr("cx", function (d) { return _this.xScale(d.x); })
                 .attr("cy", function (d) { return _this.yScale(d.y); })
                 .attr("r", function (d) { return d.r; })
-                .classed('circle', true);
+                .classed('circle', true)
+                .classed('circle--positive', function (d) { return d.result === true; })
+                .classed('circle--negative', function (d) { return d.result === false; });
             circlesSelection
                 .attr("cx", function (d) { return _this.xScale(d.x); })
-                .attr("cy", function (d) { return _this.yScale(d.y); });
+                .attr("cy", function (d) { return _this.yScale(d.y); })
+                .classed('circle--positive', function (d) { return d.result === true; })
+                .classed('circle--negative', function (d) { return d.result === false; });
             circlesSelection
                 .exit()
                 .remove('circle');
             // Update training lines
             var trainingLinesSelection = this.svg
                 .selectAll('line.train')
-                .data(this.model.trainingLines);
+                .data(this.model.trainingLines.filter(function (d, i) {
+                var linePercentage = (i / _this.model.trainingLines.length);
+                return !_this.brushPercentages || (linePercentage > _this.brushPercentages[0]
+                    && linePercentage < _this.brushPercentages[1]);
+            }), function (d) { return ("[(" + d.start.normal.x + ", " + d.start.normal.y + "),(" + d.end.normal.x + ", " + d.end.normal.y + ")]"); });
             trainingLinesSelection
                 .enter()
                 .append('line')
@@ -3892,25 +5561,16 @@ var     t1$1 = new Date;
                 .exit()
                 .remove('line');
         };
-        Chart.prototype.addTrainingLine = function (slope, offset) {
-            var line = this.convertSlopeOffsetToCoordinates(slope, offset);
-            this.model.trainingLines.push(line);
+        Chart.prototype.setTrainingLines = function (trainingLines) {
+            var _this = this;
+            var lines = trainingLines
+                .map(function (line) { return _this.convertSlopeOffsetToCoordinates(line.slope, line.offset); });
+            this.model.trainingLines = lines;
             this.update(this.model);
-            var customEvent = new CustomEvent("trainingLineUpdated", {
-                detail: {
-                    x1: line.start.scaled.x,
-                    y1: line.start.scaled.y,
-                    x2: line.end.scaled.x,
-                    y2: line.end.scaled.y,
-                    slope,
-                    offset
-                }
-            });
-            this.containgElement.node().dispatchEvent(customEvent);
         };
         Chart.prototype.convertSlopeOffsetToCoordinates = function (slope, offset) {
             var minScaledX = this.xScale.invert(0);
-            var maxScaledX = this.xScale.invert(400);
+            var maxScaledX = this.xScale.invert(this.width);
             var minX = this.xScale(minScaledX);
             var minY;
             var maxX = this.xScale(maxScaledX);
@@ -3918,8 +5578,8 @@ var     t1$1 = new Date;
             if (slope === Infinity) {
                 minY = 0;
                 minX = 0,
-                    maxY = 400;
-                maxX = 400;
+                    maxY = this.height - this.brushHeight;
+                maxX = this.width;
             }
             else {
                 minY = this.yScale(slope * minScaledX + offset);

@@ -31,7 +31,7 @@ main {
   width: 400px;
   margin: 0 auto;
   border: 1px solid #333;
-  height: 402px;
+  height: 500px;
 }
 
 .grid path {
@@ -83,4 +83,26 @@ line.division--full {
 line.division--user-defined {
   stroke: red;
   stroke-width: 3;
+}
+
+svg {
+  display: block;
+}
+
+.brush .overlay {
+  stroke: #444;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.brush .handle {
+    width: 4px;
+    fill: black;
+    height: 81px;
+    y: 0;
+}
+
+.brush .selection {
+  fill: #ddd;
+  stroke: #000;
 }
