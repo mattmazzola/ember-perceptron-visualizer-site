@@ -1,9 +1,5 @@
 import Ember from 'ember';
 
-const {
-  computed
-} = Ember;
-
 export default Ember.Controller.extend({
   interval: 1000,
   learningDatas: null,
@@ -22,7 +18,7 @@ export default Ember.Controller.extend({
     this.set('trainingPoints', []);
     this.set('trainingLines', []);
     this.set('learningDatas', []);
-    this.set('perceptron', new perceptron.Perceptron(0.5, 0.1));
+    this.set('perceptron', new perceptron.Perceptron(0.5, 0.1)); // jshint ignore:line
     console.log(this);
   },
 
@@ -37,7 +33,7 @@ export default Ember.Controller.extend({
     },
 
     pointAdded(point) {
-      // this.get('trainingPoints').pushObject(point);
+      console.log(`Point Added: `, point);
     },
 
     idealLineUpdated(data) {
@@ -81,7 +77,7 @@ export default Ember.Controller.extend({
           return {
             slope,
             offset
-          }
+          };
         });
 
       this.set('trainedLineSlope', slope);
