@@ -5328,8 +5328,8 @@ var     t1$1 = new Date;
         };
         Chart.prototype.addPoint = function (x, y) {
             var scaledCoordinates = {
-                x: Math.round(this.xScale.invert(x)),
-                y: Math.round(this.yScale.invert(y))
+                x: this.xScale.invert(x),
+                y: this.yScale.invert(y)
             };
             var newCircle = {
                 x: scaledCoordinates.x,
@@ -5359,8 +5359,8 @@ var     t1$1 = new Date;
                 var _a = [event.x, event.y], x = _a[0], y = _a[1];
                 this.dragStartPoint.normal.x = x;
                 this.dragStartPoint.normal.y = y;
-                this.dragStartPoint.scaled.x = Math.round(this.xScale.invert(x));
-                this.dragStartPoint.scaled.y = Math.round(this.yScale.invert(y));
+                this.dragStartPoint.scaled.x = this.xScale.invert(x);
+                this.dragStartPoint.scaled.y = this.yScale.invert(y);
             }
         };
         Chart.prototype.dragMove = function () {
@@ -5372,8 +5372,8 @@ var     t1$1 = new Date;
                         y
                     },
                     scaled: {
-                        x: Math.round(this.xScale.invert(x)),
-                        y: Math.round(this.yScale.invert(y))
+                        x: this.xScale.invert(x),
+                        y: this.yScale.invert(y)
                     }
                 };
                 var run = void 0;
@@ -5465,8 +5465,8 @@ var     t1$1 = new Date;
                 var _a = [event.x, event.y], x = _a[0], y = _a[1];
                 this.dragEndPoint.normal.x = x;
                 this.dragEndPoint.normal.y = y;
-                this.dragEndPoint.scaled.x = Math.round(this.xScale.invert(x));
-                this.dragEndPoint.scaled.y = Math.round(this.yScale.invert(y));
+                this.dragEndPoint.scaled.x = this.xScale.invert(x);
+                this.dragEndPoint.scaled.y = this.yScale.invert(y);
                 var differentStartPoint = (this.dragStartPoint.normal.x !== this.dragEndPoint.normal.x)
                     || (this.dragEndPoint.normal.x !== this.dragEndPoint.normal.x)
                     || (this.dragStartPoint.normal.y !== this.dragStartPoint.normal.y)

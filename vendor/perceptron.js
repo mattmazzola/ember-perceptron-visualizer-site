@@ -27,6 +27,22 @@
             if (trainingSet.length === 0) {
                 throw new Error("trainingSet data must be non-empty array. You provided: " + trainingSet);
             }
+            // Normalize training data
+            var maxDomain = trainingSet
+                .map(function (x) { return Math.abs(x.vector[0]); })
+                .reduce(function (a, b) { return Math.max(a, b); }, 0);
+            var maxRange = trainingSet
+                .map(function (x) { return Math.abs(x.vector[0]); })
+                .reduce(function (a, b) { return Math.max(a, b); }, 0);
+            var max = Math.max(maxDomain, maxRange);
+            var normalizedTrainingData = trainingSet
+                .map(function (trainingData) {
+                var normalizedVector = trainingData.vector.map(function (x) { return x / max; });
+                return {
+                    vector: normalizedVector,
+                    output: trainingData.output
+                };
+            });
             // Create new weights vector matching length of training data and set values to 0
             var weights = Array.apply(null, new Array(trainingSet[0].vector.length + 1)).map(function () { return 0; });
             var learningSet = [];
@@ -35,7 +51,7 @@
             var i;
             var _loop_1 = function() {
                 var errorCount = 0;
-                trainingSet
+                normalizedTrainingData
                     .forEach(function (_a) {
                     var vector = _a.vector, output = _a.output;
                     var trainingVector = vector.concat([1]);
@@ -49,15 +65,18 @@
                         result,
                         threshold: -weights[2],
                         output,
+                        weightChanges: [],
                         weightsChanged: false
                     };
                     learningSet.push(learningData);
                     if (error !== 0) {
                         errorCount += 1;
-                        learningSet[learningSet.length - 1].weightsChanged = true;
+                        learningData.weightsChanged = true;
                         trainingVector
                             .forEach(function (x, i) {
-                            weights[i] += learningRate * error * x;
+                            var change = learningRate * error * x;
+                            weights[i] += change;
+                            learningData.weightChanges[i] = change;
                         });
                     }
                 });
