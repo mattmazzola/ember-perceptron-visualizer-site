@@ -35,18 +35,26 @@
       <thead>
         <tr>
           <th>Weights</th>
+          <th>Weight Changes</th>
           <th>Threshold</th>
+          <th>Output</th>
           <th>Result</th>
           <th>Change</th>
+          <th>Slope</th>
+          <th>Offset</th>
         </tr>
       </thead>
       <tbody>
         {{#each learningDatas as |learningData|}}
         <tr>
           <td>[{{learningData.weights}}]</td>
+          <td>[{{learningData.weightChanges}}]</td>
           <td>{{learningData.threshold}}</td>
+          <td>{{learningData.output}}</td>
           <td>{{learningData.result}}</td>
           <td>{{learningData.weightsChanged}}</td>
+          <td>{{learningData.slope}}</td>
+          <td>{{learningData.offset}}</td>
         </tr>
         {{else}}
         <tr>

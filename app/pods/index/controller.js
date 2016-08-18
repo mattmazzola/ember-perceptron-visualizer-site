@@ -52,18 +52,6 @@ export default Ember.Controller.extend({
         });
 
       const learningDatas = this.get('perceptron').train(trainingData, 0.2);
-      this.get('learningDatas').pushObjects(learningDatas);
-
-      const weights = this.get('perceptron').weights;
-      const threshold = this.get('perceptron').threshold;
-
-      let slope = 0;
-      let offset = 0;
-      if (weights[1] !== 0) {
-        slope = -weights[0] / weights[1];
-        offset = threshold / weights[1];
-      }
-
       const trainingLines = learningDatas
         .filter(x => x.weightsChanged)
         .map(x => {
@@ -74,15 +62,28 @@ export default Ember.Controller.extend({
             offset = x.threshold / x.weights[1];
           }
           
-          return {
+          return Ember.$.extend({
             slope,
             offset
-          };
+          }, x);
         });
 
+      console.log('trainingLines', trainingLines);
+      this.set('trainingLines', trainingLines);
+      this.get('learningDatas').pushObjects(trainingLines);
+
+      const weights = this.get('perceptron').weights;
+      const threshold = this.get('perceptron').threshold;
+
+      let slope = 0;
+      let offset = 0;
+      if (weights[1] !== 0) {
+        slope = -weights[0] / weights[1];
+        offset = threshold / weights[1];
+      }
+        
       this.set('trainedLineSlope', slope);
       this.set('trainedLineOffset', offset);
-      this.set('trainingLines', trainingLines);
     },
 
     trainingLineUpdated(line) {
