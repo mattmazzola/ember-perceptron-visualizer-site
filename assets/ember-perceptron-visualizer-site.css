@@ -1,0 +1,100 @@
+header {
+  text-align: center;
+  padding: 5em 0 6em 0;
+  background: #9feff5;
+  background: -moz-linear-gradient(-45deg, #9feff5 0%, #1c70c9 100%);
+  background: -webkit-gradient(left top, right bottom, color-stop(0%, #9feff5), color-stop(100%, #1c70c9));
+  background: -webkit-linear-gradient(-45deg, #9feff5 0%, #1c70c9 100%);
+  background: -o-linear-gradient(-45deg, #9feff5 0%, #1c70c9 100%);
+  background: -ms-linear-gradient(-45deg, #9feff5 0%, #1c70c9 100%);
+  background: linear-gradient(135deg, #9feff5 0%, #1c70c9 100%);
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#9feff5', endColorstr='#1c70c9', GradientType=1 ); }
+  header h1 {
+    font-size: 6rem;
+    color: white; }
+
+main {
+  padding: 5em 0; }
+
+.description {
+  font-size: 2.5rem; }
+
+.perceptron-visualizer-container {
+  padding: 1em; }
+
+.perceptron-visualizer-container .ember-view {
+  width: 400px;
+  margin: 0 auto;
+  border: 1px solid #333;
+  height: 500px; }
+
+.grid path {
+  stroke: transparent; }
+
+.grid .tick line {
+  stroke: rgba(0, 0, 0, 0.2); }
+
+.noselect {
+  -webkit-touch-callout: none;
+  /* iOS Safari */
+  -webkit-user-select: none;
+  /* Chrome/Safari/Opera */
+  -khtml-user-select: none;
+  /* Konqueror */
+  -moz-user-select: none;
+  /* Firefox */
+  -ms-user-select: none;
+  /* Internet Explorer/Edge */
+  user-select: none;
+  /* Non-prefixed version, currently
+                                  not supported by any browser */ }
+
+.circle {
+  fill: blue; }
+
+.circle--positive {
+  fill: lightseagreen; }
+
+.circle--negative {
+  fill: mediumvioletred; }
+
+line.train {
+  stroke: purple;
+  stroke-width: 1; }
+
+line.train:not(:last-child) {
+  opacity: 0.7; }
+
+line.train:last-child {
+  stroke-width: 2; }
+
+line.division {
+  stroke: purple;
+  stroke-width: 2; }
+
+line.division--full {
+  stroke: orange; }
+
+line.division--user-defined {
+  stroke: red;
+  stroke-width: 3; }
+
+svg {
+  display: block; }
+
+.brush .overlay {
+  stroke: #444;
+  stroke-width: 1;
+  shape-rendering: crispEdges; }
+
+.brush .handle {
+  width: 4px;
+  fill: black;
+  height: 81px;
+  y: 0; }
+
+.brush .selection {
+  fill: #ddd;
+  stroke: #000; }
+
+/*# sourceMappingURL=ember-perceptron-visualizer-site.css.map */
