@@ -12,7 +12,7 @@ export default Ember.Component.extend({
 
     const $element = this.$();
     const element = $element.get(0);
-    const chart = new perceptronvisualizer('.perceptron-visualizer-container .ember-view',[-50,50], []); // jshint ignore:line
+    const chart = new perceptronvisualizer('.perceptron-visualizer-container .ember-view',[-1,1], []); // jshint ignore:line
     this.set('chart', chart);
 
     element
